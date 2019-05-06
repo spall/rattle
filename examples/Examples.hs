@@ -10,10 +10,15 @@ import System.FilePath
 import Control.Monad
 
 import qualified Builder.FSATrace
-
+import qualified Builder.Vim
 
 projects =
     [f "fsatrace" Builder.FSATrace.run "https://github.com/jacereda/fsatrace"
+    ]
+    where f a b c = (a,(b,c))
+
+projects2 =
+    [f "vim" [("build", Builder.Vim.build), ("install", Builder.Vim.install)] "https://github.com/vim/vim"
     ]
     where f a b c = (a,(b,c))
 
@@ -33,3 +38,13 @@ main = do
                         forM_ [10,9..0] $ \i -> do
                             cmd_ "git reset --hard" ["origin/master~" ++ show i]
                             rattle rattleOptions run
+        ["testVim"] ->
+            forM_ projects2 $ \(name,(runs,url)) ->
+                withTempDir $ \dir -> do
+                    cmd_ (Cwd dir) "git clone" url name
+                    cmd_ (Cwd (dir </> name)) "./configure --prefix=" [dir </> "tmp"]
+                    withCurrentDirectory (dir </> name) $
+                        forM_ [10,9..0] $ \i -> do
+                            cmd_ "git reset --hard" ["origin/master~" ++ show i]
+                            forM_ runs $ \(n,run) -> do
+                              rattle rattleOptions{rattleSpeculate=Just n} $ run (dir </> "tmp")

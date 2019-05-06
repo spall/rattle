@@ -94,6 +94,8 @@ executable rattle-demo
         extra,
         filepath,
         rattle,
-        shake
+        shake,
+        filepattern          
     other-modules:
         Builder.FSATrace
+        Builder.Vim
