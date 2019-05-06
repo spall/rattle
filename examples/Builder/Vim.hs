@@ -12,7 +12,7 @@ import Data.List
 
 build :: FilePath -> Run ()
 build prefix = if isWindows || isMac
-               then liftIO $ putStrLn "Windows and Mac are not currently supported."
+               then do cmd "echo Windows and Mac are not currently supported."
                else do
   let to0 x = "objects" </> takeBaseName x <.> "o"
       tom0 x = takeBaseName x <.> "mo"
@@ -47,15 +47,15 @@ build prefix = if isWindows || isMac
                      \ echo ' * DO NOT EDIT! Change Makefile only. */' >> auto/pathdef.c; \
                      \ echo '#include \"vim.h\"' >> auto/pathdef.c; \
                      \ echo 'char_u *default_vim_dir = (char_u *)\"" ++ prefix ++ "/share/vim\";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c; \
-                                                                                  \ echo 'char_u *default_vimruntime_dir = (char_u *)\"\";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c; \
-                                                                                  \ echo 'char_u *all_cflags = (char_u *)\"gcc -c -I. -Iproto -DHAVE_CONFIG_H -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1 \";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c; \
-                                                                                  \ echo 'char_u *all_lflags = (char_u *)\"gcc -L/usr/local/lib -Wl,--as-needed -o vim -lSM -lICE -lXt -lX11 -lXdmcp -lSM -lICE -lm -ltinfo -lnsl -ldl \";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c; \
-                                                                                  \ echo 'char_u *compiled_user = (char_u *)\"' | tr -d \"\\\\012\" >> auto/pathdef.c; \ 
-                                                                                  \ if test -n \"\"; then echo \"\" | tr -d \"\\\\012\" >> auto/pathdef.c; else ((logname) 2>/dev/null || whoami) | tr -d \"\\\\012\" >> auto/pathdef.c; fi; \
-                                                                                  \ echo '\";' >> auto/pathdef.c; \
-                                                                                  \ echo 'char_u *compiled_sys = (char_u *)\"' | tr -d \"\\\\012\" >> auto/pathdef.c; \
-                                                                                  \ if test -z \"\"; then hostname | tr -d \"\\\\012\" >> auto/pathdef.c; fi; \
-                                                                                  \ echo '\";' >> auto/pathdef.c"]
+                     \ echo 'char_u *default_vimruntime_dir = (char_u *)\"\";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c; \
+                                                                         \ echo 'char_u *all_cflags = (char_u *)\"gcc -c -I. -Iproto -DHAVE_CONFIG_H -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1 \";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c; \
+                                                                         \ echo 'char_u *all_lflags = (char_u *)\"gcc -L/usr/local/lib -Wl,--as-needed -o vim -lSM -lICE -lXt -lX11 -lXdmcp -lSM -lICE -lm -ltinfo -lnsl -ldl \";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c; \
+                                                                         \ echo 'char_u *compiled_user = (char_u *)\"' | tr -d \"\\\\012\" >> auto/pathdef.c; \
+                                                                         \ if test -n \"\"; then echo \"\" | tr -d \"\\\\012\" >> auto/pathdef.c; else ((logname) 2>/dev/null || whoami) | tr -d \"\\\\012\" >> auto/pathdef.c; fi; \
+                                                                         \ echo '\";' >> auto/pathdef.c; \
+                                                                         \ echo 'char_u *compiled_sys = (char_u *)\"' | tr -d \"\\\\012\" >> auto/pathdef.c; \
+                                                                         \ if test -z \"\"; then hostname | tr -d \"\\\\012\" >> auto/pathdef.c; fi; \
+                                                                         \ echo '\";' >> auto/pathdef.c"]
     cmd ["sh", "-c", "sh ./pathdef.sh"]
     forM_ c1 $ \c -> cmd "gcc -c -I. -Iproto -DHAVE_CONFIG_H -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1 -o" [to0 c, c]
     forM_ c2 $ \c -> cmd ["sh", "-c", "gcc -c -I. -Ilibvterm/include -Iproto -DHAVE_CONFIG_H -g -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1 -DINLINE=\"\" -DVSNPRINTF=vim_vsnprintf -DIS_COMBINING_FUNCTION=utf_iscomposing_uint -DWCWIDTH_FUNCTION=utf_uint2cells -o " ++ to0 c ++ " " ++ c]
@@ -81,96 +81,59 @@ build prefix = if isWindows || isMac
 
 install :: FilePath -> Run ()
 install prefix = if isWindows || isMac
-                 then liftIO $ putStrLn "Windows and Mac are not currently supported."
+                 then do cmd "echo Windows and Mac are not currently supported."
                  else do
   cmd ["sh", "-c", "if test ! -f src/auto/config.mk; then cp src/config.mk.dist src/auto/config.mk; fi"]
   cmd ["sh", "-c", "echo \"Starting make in the src directory.\""]
   cmd ["sh", "-c", "echo \"If there are problems, cd to the src directory and run make there\""]
   withCmdOptions [Cwd "src"] $ do
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/bin"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/bin"]
+    let installPaths = []
+        installChmod p chp = cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ p ++
+                                              "; chmod " ++ show chp ++ " " ++ p]
+        cpChmod src dest chp = cmd ["sh", "-c", "cp " ++ src ++ " " ++ dest ++
+                                                "; chmod " ++ show chp ++ " " ++ dest]
+        installml f = cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ f ++
+                                       " vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
+        installman t f1 v = cmd ["sh", "-c", "/bin/sh ./installman.sh " ++ t ++ " " ++ f1 ++ " " ++ v ++ " "
+                                             ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 "
+                                             ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
+                      
+    installChmod (prefix ++ "/bin") 755
+    
     cmd ["sh", "-c", "if test -f " ++ prefix ++ "/bin/vim; then mv -f " ++ prefix ++ "/bin/vim " ++ prefix ++ "/bin/vim.rm; rm -f " ++ prefix ++ "/bin/vim.rm; fi"]
     cmd ["sh", "-c", "cp vim " ++ prefix ++ "/bin; \
-    \ strip " ++ prefix ++ "/bin/vim"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/bin/vim"]
+                                            \ strip " ++ prefix ++ "/bin/vim; \
+                                                                   \ chmod 755 " ++ prefix ++ "/bin/vim"]
     cmd ["sh", "-c", "echo >/dev/null"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim"]
-    cmd ["sh", "-c", "cp vimtutor " ++ prefix ++ "/bin/vimtutor"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/bin/vimtutor"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/doc"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/doc"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/print"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/print"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/colors"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/colors"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/syntax"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/syntax"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/indent"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/indent"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/ftplugin"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/ftplugin"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/autoload"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/autoload"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/autoload/dist"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/autoload/dist"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/autoload/xml"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/autoload/xml"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/plugin"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/plugin"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/tutor"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/tutor"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/spell"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/spell"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/compiler"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/compiler"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/man1 \"\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
+    installChmod (prefix ++ "/share/vim") 755
+    installChmod (prefix ++ "/bin/vimtutor") 755
+    cmd ["sh", "-c", "cp vimtutor " ++ prefix ++ "/bin/vimtutor; \
+                                                 \ chmod 755 " ++ prefix ++ "/bin/vimtutor"]
+    installChmod (prefix ++ "/share/vim/vim81") 755
+    let vim81dirs = ["doc", "print", "colors", "syntax", "indent", "ftplugin",
+                     "autoload", "plugin", "tutor", "spell", "compiler"]
+    forM_ vim81dirs $ \d -> installChmod (prefix ++ "/share/vim/vim81/" ++ d) 755
+    installChmod (prefix ++ "/share/vim/vim81/autoload/dist") 755
+    installChmod (prefix ++ "/share/vim/vim81/autoload/xml") 755
+
+    installman "install" (prefix ++ "/share/man/man1") "\"\""
+
     cmd ["sh", "-c", "cd ../runtime/doc; if test -z \"\" -a -f tags; then mv -f tags tags.dist; fi"]
     cmd ["sh", "-c", "echo generating help tags"]
     withCmdOptions [Cwd "../runtime/doc"] $ do
-      cmd ["sh", "-c", "" ++ prefix ++ "/bin/vim -u NONE -esX -c \"helptags ++t .\" -c quit; \    
-    \ files=`ls *.txt tags`; files=\"$files `ls *.??x tags-?? 2>/dev/null || true`\"; cp $files " ++ prefix ++ "/share/vim/vim81/doc; cd " ++ prefix ++ "/share/vim/vim81/doc; chmod 644 $files; \
-                                                                                                                                                        \ if test -f tags.dist; then mv -f tags.dist tags; fi"]
-    cmd ["sh", "-c", "cp ../runtime/doc/*.pl " ++ prefix ++ "/share/vim/vim81/doc"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/doc/*.pl"]
-    cmd ["sh", "-c", "cp ../runtime/menu.vim " ++ prefix ++ "/share/vim/vim81/menu.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/menu.vim"]
-    cmd ["sh", "-c", "cp ../runtime/synmenu.vim " ++ prefix ++ "/share/vim/vim81/synmenu.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/synmenu.vim"]
-    cmd ["sh", "-c", "cp ../runtime/delmenu.vim " ++ prefix ++ "/share/vim/vim81/delmenu.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/delmenu.vim"]
-    cmd ["sh", "-c", "cp ../runtime/defaults.vim " ++ prefix ++ "/share/vim/vim81/defaults.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/defaults.vim"]
-    cmd ["sh", "-c", "cp ../runtime/evim.vim " ++ prefix ++ "/share/vim/vim81/evim.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/evim.vim"]
-    cmd ["sh", "-c", "cp ../runtime/mswin.vim " ++ prefix ++ "/share/vim/vim81/mswin.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/mswin.vim"]
-    cmd ["sh", "-c", "cp ../runtime/rgb.txt " ++ prefix ++ "/share/vim/vim81/rgb.txt"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/rgb.txt"]
-    cmd ["sh", "-c", "cp ../runtime/bugreport.vim " ++ prefix ++ "/share/vim/vim81/bugreport.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/bugreport.vim"]
-    cmd ["sh", "-c", "cp ../runtime/vimrc_example.vim " ++ prefix ++ "/share/vim/vim81"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/vimrc_example.vim"]
-    cmd ["sh", "-c", "cp ../runtime/gvimrc_example.vim " ++ prefix ++ "/share/vim/vim81"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/gvimrc_example.vim"]
-    cmd ["sh", "-c", "cp ../runtime/filetype.vim " ++ prefix ++ "/share/vim/vim81/filetype.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/filetype.vim"]
-    cmd ["sh", "-c", "cp ../runtime/ftoff.vim " ++ prefix ++ "/share/vim/vim81/ftoff.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/ftoff.vim"]
-    cmd ["sh", "-c", "cp ../runtime/scripts.vim " ++ prefix ++ "/share/vim/vim81/scripts.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/scripts.vim"]
-    cmd ["sh", "-c", "cp ../runtime/ftplugin.vim " ++ prefix ++ "/share/vim/vim81/ftplugin.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/ftplugin.vim"]
-    cmd ["sh", "-c", "cp ../runtime/ftplugof.vim " ++ prefix ++ "/share/vim/vim81/ftplugof.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/ftplugof.vim"]
-    cmd ["sh", "-c", "cp ../runtime/indent.vim " ++ prefix ++ "/share/vim/vim81/indent.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/indent.vim"]
-    cmd ["sh", "-c", "cp ../runtime/indoff.vim " ++ prefix ++ "/share/vim/vim81/indoff.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/indoff.vim"]
-    cmd ["sh", "-c", "cp ../runtime/optwin.vim " ++ prefix ++ "/share/vim/vim81/optwin.vim"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/optwin.vim"]
+      cmd ["sh", "-c", "" ++ prefix ++ "/bin/vim -u NONE -esX -c \"helptags ++t .\" -c quit; \
+                                       \ files=`ls *.txt tags`; files=\"$files `ls *.??x tags-?? 2>/dev/null || true`\"; cp $files " ++ prefix ++ "/share/vim/vim81/doc; cd " ++ prefix ++ "/share/vim/vim81/doc; chmod 644 $files; \
+                                                                                                                                                                                           \ if test -f tags.dist; then mv -f tags.dist tags; fi"]
+        
+    cmd ["sh", "-c", "cp ../runtime/doc/*.pl " ++ prefix ++ "/share/vim/vim81/doc; \
+                                                            \ chmod 755 " ++ prefix ++ "/share/vim/vim81/doc/*.pl"]
+    let cpToVim81 = ["menu.vim", "synmenu.vim", "delmenu.vim", "defaults.vim",
+                     "evim.vim", "mswin.vim", "rgb.txt", "bugreport.vim",
+                     "vimrc_example.vim", "gvimrc_example.vim", "filetype.vim",
+                     "ftoff.vim", "scripts.vim", "ftplugin.vim", "ftplugof.vim",
+                     "indent.vim", "indoff.vim", "optwin.vim"]
+    forM_ cpToVim81 $ \f -> cpChmod ("../runtime/" ++ f) (prefix ++ "/share/vim/vim81/" ++ f) 644
+    
     cmd ["sh", "-c", "cd ../runtime/print; cp *.ps " ++ prefix ++ "/share/vim/vim81/print"]
     cmd ["sh", "-c", "cd " ++ prefix ++ "/share/vim/vim81/print; chmod 644 *.ps"]
     cmd ["sh", "-c", "cd ../runtime/colors; cp -r *.vim tools README.txt " ++ prefix ++ "/share/vim/vim81/colors"]
@@ -192,99 +155,101 @@ install prefix = if isWindows || isMac
     cmd ["sh", "-c", "cd " ++ prefix ++ "/share/vim/vim81/ftplugin; chmod 644 *.vim README.txt"]
     cmd ["sh", "-c", "cd ../runtime/compiler; cp *.vim README.txt " ++ prefix ++ "/share/vim/vim81/compiler"]
     cmd ["sh", "-c", "cd " ++ prefix ++ "/share/vim/vim81/compiler; chmod 644 *.vim README.txt"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/macros"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/macros"]
-    cmd ["sh", "-c", "cp -r ../runtime/macros/* " ++ prefix ++ "/share/vim/vim81/macros"]
-    cmd ["sh", "-c", "chmod 755 `find " ++ prefix ++ "/share/vim/vim81/macros -type d -print`"]
-    cmd ["sh", "-c", "chmod 644 `find " ++ prefix ++ "/share/vim/vim81/macros -type f -print`"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/macros/less.sh"]
+    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/macros; \
+                                                              \ chmod 755 " ++ prefix ++ "/share/vim/vim81/macros"]
+    cmd ["sh", "-c", "cp -r ../runtime/macros/* " ++ prefix ++ "/share/vim/vim81/macros; \
+                                                               \ chmod 755 `find " ++ prefix ++ "/share/vim/vim81/macros -type d -print`; \
+                                                                                                \ chmod 644 `find " ++ prefix ++ "/share/vim/vim81/macros -type f -print`; \
+                                                                                                                                 \ chmod 755 " ++ prefix ++ "/share/vim/vim81/macros/less.sh"]
     cmd ["sh", "-c", "cvs=`find " ++ prefix ++ "/share/vim/vim81/macros \\( -name CVS -o -name AAPDIR -o -name \"*.info\" \\) -print`; if test -n \"$cvs\"; then rm -rf $cvs; fi"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/pack"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/pack"]
-    cmd ["sh", "-c", "cp -r ../runtime/pack/* " ++ prefix ++ "/share/vim/vim81/pack"]
-    cmd ["sh", "-c", "chmod 755 `find " ++ prefix ++ "/share/vim/vim81/pack -type d -print`"]
-    cmd ["sh", "-c", "chmod 644 `find " ++ prefix ++ "/share/vim/vim81/pack -type f -print`"]
-    cmd ["sh", "-c", "cp ../runtime/tutor/README* ../runtime/tutor/tutor* " ++ prefix ++ "/share/vim/vim81/tutor"]
-    cmd ["sh", "-c", "rm -f " ++ prefix ++ "/share/vim/vim81/tutor/*.info"]
-    cmd ["sh", "-c", "chmod 644 " ++ prefix ++ "/share/vim/vim81/tutor/*"]
+    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/pack; \
+                                                              \ chmod 755 " ++ prefix ++ "/share/vim/vim81/pack"]
+    cmd ["sh", "-c", "cp -r ../runtime/pack/* " ++ prefix ++ "/share/vim/vim81/pack; \
+                                                             \ chmod 755 `find " ++ prefix ++ "/share/vim/vim81/pack -type d -print`; \
+                                                                                              \ chmod 644 `find " ++ prefix ++ "/share/vim/vim81/pack -type f -print`"]
+    cmd ["sh", "-c", "cp ../runtime/tutor/README* ../runtime/tutor/tutor* " ++ prefix ++ "/share/vim/vim81/tutor; \
+                                                                                         \ rm -f " ++ prefix ++ "/share/vim/vim81/tutor/*.info; \
+                                                                                                                \ chmod 644 " ++ prefix ++ "/share/vim/vim81/tutor/*"]
     cmd ["sh", "-c", "if test -f ../runtime/spell/en.latin1.spl; then cp ../runtime/spell/*.spl ../runtime/spell/*.sug ../runtime/spell/*.vim " ++ prefix ++ "/share/vim/vim81/spell; chmod 644 " ++ prefix ++ "/share/vim/vim81/spell/*.spl " ++ prefix ++ "/share/vim/vim81/spell/*.sug " ++ prefix ++ "/share/vim/vim81/spell/*.vim; fi"]
     cmd ["sh", "-c", "cd " ++ prefix ++ "/bin; ln -s vim ex"]
     cmd ["sh", "-c", "cd " ++ prefix ++ "/bin; ln -s vim view"]
     cmd ["sh", "-c", "cd " ++ prefix ++ "/bin; ln -s vim rvim"]
     cmd ["sh", "-c", "cd " ++ prefix ++ "/bin; ln -s vim rview"]
     cmd ["sh", "-c", "cd " ++ prefix ++ "/bin; ln -s vim vimdiff"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/tools"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/tools"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/da/man1 \"-da\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/da.ISO8859-1/man1 \"-da\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/da.UTF-8/man1 \"-da.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/de/man1 \"-de\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/de.ISO8859-1/man1 \"-de\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/de.UTF-8/man1 \"-de.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/fr/man1 \"-fr\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/fr.ISO8859-1/man1 \"-fr\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/fr.UTF-8/man1 \"-fr.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/it/man1 \"-it\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/it.ISO8859-1/man1 \"-it\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/it.UTF-8/man1 \"-it.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/ja/man1 \"-ja.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/pl/man1 \"-pl\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/pl.ISO8859-2/man1 \"-pl\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/pl.UTF-8/man1 \"-pl.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/ru.KOI8-R/man1 \"-ru\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/ru.UTF-8/man1 \"-ru.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
+    installml $ prefix ++ "/share/man/man1"
+    installChmod (prefix ++ "/share/vim/vim81/tools") 755
+
+    installman "xxd" (prefix ++ "/share/man/da/man1") "\"-da\""
+    installman "xxd" (prefix ++ "/share/man/da.ISO8859-1/man1") "\"-da\""
+    installman "xxd" (prefix ++ "/share/man/da.UTF-8/man1") "\"-da.UTF-8\""
+    installman "xxd" (prefix ++ "/share/man/de/man1") "\"-de\""
+    installman "xxd" (prefix ++ "/share/man/de.ISO8859-1/man1") "\"-de\""
+    installman "xxd" (prefix ++ "/share/man/de.UTF-8/man1") "\"-de.UTF-8\""
+    installman "xxd" (prefix ++ "/share/man/fr/man1") "\"-fr\""
+    installman "xxd" (prefix ++ "/share/man/fr.ISO8859-1/man1") "\"-fr\""
+    installman "xxd" (prefix ++ "/share/man/fr.UTF-8/man1") "\"-fr.UTF-8\""
+    installman "xxd" (prefix ++ "/share/man/it/man1") "\"-it\""
+    installman "xxd" (prefix ++ "/share/man/it.ISO8859-1/man1") "\"-it\""
+    installman "xxd" (prefix ++ "/share/man/it.UTF-8/man1") "\"-it.UTF-8\""
+    installman "xxd" (prefix ++ "/share/man/ja/man1") "\"-ja.UTF-8\""
+    installman "xxd" (prefix ++ "/share/man/pl/man1") "\"-pl\""
+    installman "xxd" (prefix ++ "/share/man/pl.ISO8859-2/man1") "\"-pl\""
+    installman "xxd" (prefix ++ "/share/man/pl.UTF-8/man1") "\"-pl.UTF-8\""
+    installman "xxd" (prefix ++ "/share/man/ru.KOI8-R/man1") "\"-ru\""
+    installman "xxd" (prefix ++ "/share/man/ru.UTF-8/man1") "\"-ru.UTF-8\""
     cmd ["sh", "-c", "if test -f " ++ prefix ++ "/bin/xxd; then mv -f " ++ prefix ++ "/bin/xxd " ++ prefix ++ "/bin/xxd.rm; rm -f " ++ prefix ++ "/bin/xxd.rm; fi"]
     cmd ["sh", "-c", "cp xxd/xxd " ++ prefix ++ "/bin; \
-                                                \ strip " ++ prefix ++ "/bin/xxd"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/bin/xxd"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh xxd " ++ prefix ++ "/share/man/man1 \"\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
+                                                \ strip " ++ prefix ++ "/bin/xxd; \
+                                                                       \ chmod 755 " ++ prefix ++ "/bin/xxd"]
+    installman "xxd" (prefix ++ "/share/man/man1") "\"\""
+    
     cmd ["sh", "-c", "cp -r ../runtime/tools/* " ++ prefix ++ "/share/vim/vim81/tools; \
     \ cvs=`find " ++ prefix ++ "/share/vim/vim81/tools \\( -name CVS -o -name AAPDIR \\) -print`; if test -n \"$cvs\"; then rm -rf $cvs; fi; \
     \ chmod 644 " ++ prefix ++ "/share/vim/vim81/tools/*; \
     \ perlpath=`./which.sh perl` && sed -e \"s+/usr/bin/perl+$perlpath+\" ../runtime/tools/efm_perl.pl >" ++ prefix ++ "/share/vim/vim81/tools/efm_perl.pl; \
     \ awkpath=`./which.sh nawk` && sed -e \"s+/usr/bin/nawk+$awkpath+\" ../runtime/tools/mve.awk >" ++ prefix ++ "/share/vim/vim81/tools/mve.awk; if test -z \"$awkpath\"; then awkpath=`./which.sh gawk` && sed -e \"s+/usr/bin/nawk+$awkpath+\" ../runtime/tools/mve.awk >" ++ prefix ++ "/share/vim/vim81/tools/mve.awk; if test -z \"$awkpath\"; then awkpath=`./which.sh awk` && sed -e \"s+/usr/bin/nawk+$awkpath+\" ../runtime/tools/mve.awk >" ++ prefix ++ "/share/vim/vim81/tools/mve.awk; fi; fi"]
     cmd ["sh", "-c", "chmod 755 `grep -l \"^#!\" " ++ prefix ++ "/share/vim/vim81/tools/*`"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/lang"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/lang"]
-    cmd ["sh", "-c", "/bin/sh install-sh -c -d " ++ prefix ++ "/share/vim/vim81/keymap"]
-    cmd ["sh", "-c", "chmod 755 " ++ prefix ++ "/share/vim/vim81/keymap"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/da/man1 \"-da\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/da.ISO8859-1/man1 \"-da\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/da.UTF-8/man1 \"-da.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/de/man1 \"-de\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/de.ISO8859-1/man1 \"-de\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/de.UTF-8/man1 \"-de.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/fr/man1 \"-fr\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/fr.ISO8859-1/man1 \"-fr\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/fr.UTF-8/man1 \"-fr.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/it/man1 \"-it\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/it.ISO8859-1/man1 \"-it\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/it.UTF-8/man1 \"-it.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/ja/man1 \"-ja.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/pl/man1 \"-pl\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/pl.ISO8859-2/man1 \"-pl\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/pl.UTF-8/man1 \"-pl.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/ru.KOI8-R/man1 \"-ru\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installman.sh install " ++ prefix ++ "/share/man/ru.UTF-8/man1 \"-ru.UTF-8\" " ++ prefix ++ "/share/vim " ++ prefix ++ "/share/vim/vim81 " ++ prefix ++ "/share/vim ../runtime/doc 644 vim vimdiff evim"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/da/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/da.ISO8859-1/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/da.UTF-8/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/de/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/de.ISO8859-1/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/de.UTF-8/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/fr/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/fr.ISO8859-1/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/fr.UTF-8/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/it/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/it.ISO8859-1/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/it.UTF-8/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/ja/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/pl/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/pl.ISO8859-2/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/pl.UTF-8/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/ru.KOI8-R/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
-    cmd ["sh", "-c", "/bin/sh ./installml.sh install \"\" " ++ prefix ++ "/share/man/ru.UTF-8/man1 vim vimdiff evim ex view rvim rview gvim gview rgvim rgview gvimdiff eview"]
+
+    installChmod (prefix ++ "/share/vim/vim81/lang") 755
+    installChmod (prefix ++ "/share/vim/vim81/keymap") 755
+
+    installman "install" (prefix ++ "/share/man/da/man1") "\"-da\""
+    installman "install" (prefix ++ "/share/man/da.ISO8859-1/man1") "\"-da\""
+    installman "install" (prefix ++ "/share/man/da.UTF-8/man1") "\"-da.UTF-8\""
+    installman "install" (prefix ++ "/share/man/de/man1") "\"-de\""
+    installman "install" (prefix ++ "/share/man/de.ISO8859-1/man1") "\"-de\""
+    installman "install" (prefix ++ "/share/man/de.UTF-8/man1") "\"-de.UTF-8\""
+    installman "install" (prefix ++ "/share/man/fr/man1") "\"-fr\""
+    installman "install" (prefix ++ "/share/man/fr.ISO8859-1/man1") "\"-fr\""
+    installman "install" (prefix ++ "/share/man/fr.UTF-8/man1") "\"-fr.UTF-8\""
+    installman "install" (prefix ++ "/share/man/it/man1") "\"-it\""
+    installman "install" (prefix ++ "/share/man/it.ISO8859-1/man1") "\"-it\""
+    installman "install" (prefix ++ "/share/man/it.UTF-8/man1") "\"-it.UTF-8\""
+    installman "install" (prefix ++ "/share/man/ja/man1") "\"-ja.UTF-8\""
+    installman "install" (prefix ++ "/share/man/pl/man1") "\"-pl\""
+    installman "install" (prefix ++ "/share/man/pl.ISO8859-2/man1") "\"--pl\""
+    installman "install" (prefix ++ "/share/man/pl.UTF-8/man1") "\"-pl.UTF-8\""
+    installman "install" (prefix ++ "/share/man/ru.KOI8-R/man1") "\"-ru\""
+    installman "install" (prefix ++ "/share/man/ru.UTF-8/man1") "\"-ru.UTF-8\""
+
+    installml $ prefix ++ "/share/man/da/man1"
+    installml $ prefix ++ "/share/man/da.ISO8859-1/man1"
+    installml $ prefix ++ "/share/man/da.UTF-8/man1"
+    installml $ prefix ++ "/share/man/de/man1"
+    installml $ prefix ++ "/share/man/de.ISO8859-1/man1"
+    installml $ prefix ++ "/share/man/de.UTF-8/man1"
+    installml $ prefix ++ "/share/man/fr/man1"
+    installml $ prefix ++ "/share/man/fr.ISO8859-1/man1"
+    installml $ prefix ++ "/share/man/fr.UTF-8/man1"
+    installml $ prefix ++ "/share/man/it/man1"
+    installml $ prefix ++ "/share/man/it.ISO8859-1/man1"
+    installml $ prefix ++ "/share/man/it.UTF-8/man1"
+    installml $ prefix ++ "/share/man/ja/man1"
+    installml $ prefix ++ "/share/man/pl/man1"
+    installml $ prefix ++ "/share/man/pl.ISO8859-2/man1"
+    installml $ prefix ++ "/share/man/pl.UTF-8/man1"
+    installml $ prefix ++ "/share/man/ru.KOI8-R/man1"
+    installml $ prefix ++ "/share/man/ru.UTF-8.man1"
     withCmdOptions [Cwd "po"] $ do
       cmd ["sh", "-c", "if test \"x\" = \"x" ++ prefix ++ "\"; then echo \"******************************************\"; echo \" please use make from the src directory \"; echo \"******************************************\"; exit 1; fi"]
       cmd ["sh", "-c", "for lang in af ca cs cs.cp1250 da de en_GB eo es fi fr ga it ja ja.euc-jp ja.sjis ko ko.UTF-8 lv nb nl no pl pl.UTF-8 pl.cp1250 pt_BR ru ru.cp1251 sk sk.cp1250 sr sv uk uk.cp1251 vi zh_CN zh_CN.UTF-8 zh_CN.cp936 zh_TW zh_TW.UTF-8 ; do dir=" ++ prefix ++ "/share/vim/vim81/lang/$lang/; if test ! -x \"$dir\"; then mkdir $dir; chmod 755 $dir; fi; dir=" ++ prefix ++ "/share/vim/vim81/lang/$lang/LC_MESSAGES; if test ! -x \"$dir\"; then mkdir $dir; chmod 755 $dir; fi; if test -r $lang.mo; then cp $lang.mo $dir/vim.mo; chmod 644 $dir/vim.mo; fi; done"]
