@@ -42,9 +42,9 @@ main = do
             forM_ projects2 $ \(name,(runs,url)) ->
                 withTempDir $ \dir -> do
                     cmd_ (Cwd dir) "git clone" url name
-                    cmd_ (Cwd (dir </> name)) "./configure --prefix=" [dir </> "tmp"]
+                    cmd_ (Cwd (dir </> name)) ["sh", "-c", "./configure --prefix=" ++ (dir </> "tmp")]
                     withCurrentDirectory (dir </> name) $
                         forM_ [10,9..0] $ \i -> do
                             cmd_ "git reset --hard" ["origin/master~" ++ show i]
                             forM_ runs $ \(n,run) -> do
-                              rattle rattleOptions{rattleSpeculate=Just n} $ run (dir </> "tmp")
+                              rattle rattleOptions{rattleSpeculate=Just n} run
