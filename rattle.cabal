@@ -96,7 +96,8 @@ executable rattle-demo
         rattle,
         shake,
         filepattern,
-        unordered-containers                    
+        unordered-containers,
+        strings                              
     other-modules:
         Builder.FSATrace
         Builder.Vim
