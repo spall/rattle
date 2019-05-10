@@ -7,52 +7,14 @@ import Development.Rattle
 import System.FilePattern.Directory
 import System.FilePath
 import Control.Monad
+import Builder.VimVars
 import Data.List
-import qualified Data.HashMap.Strict as Map
-import Data.Strings
 
 shcCmd :: String -> Run ()
 shcCmd c = cmd ["sh", "-c", c]
 
 cmdSeq :: [String] -> Run ()
 cmdSeq xs = shcCmd $ intercalate "; " xs
-
-parseConfig :: FilePath -> IO (Map.HashMap String String)
-parseConfig fp = do
-  contents <- readFile fp 
-  return $ foldl (\hm l -> case words l of
-                             [k,"="] -> hm
-                             (k:"=":vs) -> Map.insert k (unwords vs) hm
-                             _ -> hm) Map.empty $ lines contents
-
-isResolved :: Map.HashMap String String -> String -> Bool
-isResolved hm k = not $ any (\k -> isInfixOf (f k) str) $ Map.keys hm
-  where f k = "${" ++ k ++ "}"
-        str = hm Map.! k
-
-resolveVals :: Map.HashMap String String -> Map.HashMap String String
-resolveVals hm = foldl' resolveVal hm $ Map.keys hm
-                   
-resolveVal :: Map.HashMap String String -> String -> Map.HashMap String String
-resolveVal hm k = if isResolved hm k
-                  then hm
-                  else g (Map.keys hm) v hm
-  where f k = "${" ++ k  ++ "}"
-        g [] s hm = Map.insert k s hm
-        g (x:xs) s hm = if isInfixOf (f x) s
-                        then if isResolved hm x
-                             then let s2 = replaceAll (f x) (hm Map.! x) s in
-                                    g xs s2 hm
-                             else let nh = resolveVal hm x
-                                      s2 = replaceAll (f x) (nh Map.! x) s in
-                                    g xs s2 nh
-                        else g xs s hm
-        v = hm Map.! k
-
-replaceAll :: String -> String -> String -> String
-replaceAll n r h = if isInfixOf n h
-                   then replaceAll n r $ strReplace n r h
-                   else h
 
 build :: Run ()
 build = if isWindows || isMac
@@ -78,26 +40,32 @@ build = if isWindows || isMac
           return $ (xs ++ ys ++ ["auto/pathdef.c"]) \\ notCompiled
   po <- liftIO $ getDirectoryFiles "src/po" ["*.po"]
   cmd ["sh", "-c", "if test ! -f src/auto/config.mk; then cp src/config.mk.dist src/auto/config.mk; fi"]
-  cfgVars <- liftIO $ parseConfig ("src" </> "auto" </> "config.mk")
-  cfgVars <- return $ resolveVals cfgVars
-  let cfgVal k = case Map.lookup k cfgVars of
-                   Nothing -> error $ "Did not find config variable: " ++ k
-                   Just v -> v
-      vimname = cfgVal "VIMNAME"
-      cc = cfgVal "CC"
-      defs = cfgVal "DEFS"
-      cflags = cfgVal "CFLAGS"
-      ldflags = cfgVal "LDFLAGS"
-      libs = cfgVal "LIBS"
-      x_pre_libs = cfgVal "X_PRE_LIBS"
-      x_extra_libs = cfgVal "X_EXTRA_LIBS"
-      x_libs = cfgVal "X_LIBS"
-      prefix = cfgVal "prefix"
-      term_src = words $ cfgVal "TERM_SRC"
-      quotesed = cfgVal "QUOTESED"
-      nl = cfgVal "NL"
-      makemo = cfgVal "MAKEMO"
-      datadir = cfgVal "DATADIR"
+  cfgVars <- liftIO $ setupVars ("src" </> "auto" </> "config.mk")
+  let vimname = cfgVal "VIMNAME" cfgVars
+      cc = cfgVal "CC" cfgVars 
+      defs = cfgVal "DEFS" cfgVars
+      cflags = cfgVal "CFLAGS" cfgVars 
+      ldflags = cfgVal "LDFLAGS" cfgVars
+      libs = cfgVal "LIBS" cfgVars
+      x_pre_libs = cfgVal "X_PRE_LIBS" cfgVars
+      x_extra_libs = cfgVal "X_EXTRA_LIBS" cfgVars
+      x_libs = cfgVal "X_LIBS" cfgVars
+      prefix = cfgVal "prefix" cfgVars
+      term_src = words $ cfgVal "TERM_SRC" cfgVars
+      quotesed = cfgVal "QUOTESED" cfgVars
+      nl = cfgVal "NL" cfgVars
+      makemo = cfgVal "MAKEMO" cfgVars
+      datadir = cfgVal "DATADIR" cfgVars
+      ccc = cfgVal "CCC" cfgVars -- defined in src/Makefile
+      purify = "" -- defined in src/makefile
+      shrpenv = cfgVal "SHRPENV" cfgVars
+      cclink = cfgVal "CClink" cfgVars
+      allLibDirs = cfgVal "ALL_LIB_DIRS" cfgVars
+      vimtarget = cfgVal "VIMTARGET" cfgVars
+      allLibs = cfgVal "ALL_LIBS" cfgVars
+      linkAsNeeded = cfgVal "LINK_AS_NEEDED" cfgVars
+      srcdir = cfgVal "srcdir" cfgVars
+      cppflags = cfgVal "CPPFLAGS" cfgVars
       
   withCmdOptions [Cwd "src"] $ do
     shcCmd "/bin/sh install-sh -c -d objects"
@@ -119,12 +87,18 @@ build = if isWindows || isMac
            ,"if test -z \"\"; then hostname | tr -d " ++ nl ++ " >> auto/pathdef.c; fi"
            ,"echo '\";' >> auto/pathdef.c"]
     shcCmd "sh ./pathdef.sh"
-    forM_ c1 $ \c -> cmd $ cc ++ " -c -I. -Iproto " ++ defs ++ " " ++ cflags ++ " -o" ++ to0 c ++ " " ++ c
+    forM_ c1 $ \c -> cmd $ cc ++ " -c -I. -Iproto " ++ defs ++ " " ++ cflags ++ " -o " ++ to0 c ++ " " ++ c
     forM_ term_src $ \c -> shcCmd $ "gcc -c -I. -Ilibvterm/include -Iproto " ++ defs ++ " " ++ cflags ++ " -DINLINE=\"\" -DVSNPRINTF=vim_vsnprintf -DIS_COMBINING_FUNCTION=utf_iscomposing_uint -DWCWIDTH_FUNCTION=utf_uint2cells -o " ++ to0 c ++ " " ++ c
+
+    --shcCmd $ ccc ++ " version.c -o objects/version.o" -- this is what is in the makefile
+  
+    -- should this be replaced with a list? 
     o1 <- liftIO $ getDirectoryFiles "src" ["objects/*.o"]
-    shcCmd $ "LINK=\" " ++ cc ++ " " ++ ldflags ++ " -o vim " ++ unwords o1 ++ " " ++ x_pre_libs ++ " " ++ x_libs ++ " " ++ x_extra_libs ++ " " ++ libs ++ " \" MAKE=\"submake\" LINK_AS_NEEDED=yes sh ./link.sh"
+    shcCmd $ "LINK=\"" ++ purify ++ " " ++ shrpenv ++ " " ++ cclink ++ " " ++ allLibDirs ++ " "
+      ++ ldflags ++ " -o " ++ vimtarget ++ " " ++ unwords o1 ++ " " ++ allLibs ++ "\" LINK_AS_NEEDED="
+      ++ linkAsNeeded ++ " sh " ++ srcdir ++ "/link.sh"
     withCmdOptions [Cwd "xxd"] $ do
-      shcCmd $ cc ++ " " ++ cflags ++ " " ++ ldflags ++ " -DUNIX -o xxd xxd.c"
+      shcCmd $ cc ++ " " ++ cppflags ++ " " ++ cflags ++ " " ++ ldflags ++ " -DUNIX -o xxd xxd.c"
     withCmdOptions [Cwd "po"] $ do
       cmdSeq ["rm -f pl.UTF-8.po"
              ,"iconv -f iso-8859-2 -t utf-8 pl.po | sed -e 's/charset=ISO-8859-2/charset=UTF-8/' -e 's/# Original translations/# Generated from pl.po, DO NOT EDIT/' > pl.UTF-8.po"]
@@ -145,16 +119,12 @@ install = if isWindows || isMac
           then do cmd "echo Windows and Mac are not currently supported."
           else do
   cmd ["sh", "-c", "if test ! -f src/auto/config.mk; then cp src/config.mk.dist src/auto/config.mk; fi"]
-  cfgVars <- liftIO $ parseConfig ("src" </> "auto" </> "config.mk")
-  cfgVars <- return $ resolveVals cfgVars
-  let cfgVal k = case Map.lookup k cfgVars of
-                   Nothing -> error $ "Did not find config variable: " ++ k
-                   Just v -> v
-      prefix = cfgVal "prefix"
-      execPrefix = cfgVal "exec_prefix"
-      datadir = cfgVal "DATADIR"
-      mandir = cfgVal "MANDIR"
-      bindir = cfgVal "BINDIR"
+  cfgVars <- liftIO $ setupVars ("src" </> "auto" </> "config.mk")
+  let prefix = cfgVal "prefix" cfgVars
+      execPrefix = cfgVal "exec_prefix" cfgVars
+      datadir = cfgVal "DATADIR" cfgVars
+      mandir = cfgVal "MANDIR" cfgVars
+      bindir = cfgVal "BINDIR" cfgVars
       
   withCmdOptions [Cwd "src"] $ do
     let installPaths = []
