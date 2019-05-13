@@ -41,8 +41,7 @@ build = if isWindows || isMac
   po <- liftIO $ getDirectoryFiles "src/po" ["*.po"]
   cmd ["sh", "-c", "if test ! -f src/auto/config.mk; then cp src/config.mk.dist src/auto/config.mk; fi"]
   cfgVars <- liftIO $ setupVars ("src" </> "auto" </> "config.mk")
-  let vimname = cfgVal "VIMNAME" cfgVars
-      cc = cfgVal "CC" cfgVars 
+  let cc = cfgVal "CC" cfgVars 
       defs = cfgVal "DEFS" cfgVars
       cflags = cfgVal "CFLAGS" cfgVars 
       ldflags = cfgVal "LDFLAGS" cfgVars
@@ -50,9 +49,8 @@ build = if isWindows || isMac
       x_pre_libs = cfgVal "X_PRE_LIBS" cfgVars
       x_extra_libs = cfgVal "X_EXTRA_LIBS" cfgVars
       x_libs = cfgVal "X_LIBS" cfgVars
-      prefix = cfgVal "prefix" cfgVars
       term_src = words $ cfgVal "TERM_SRC" cfgVars
-      quotesed = cfgVal "QUOTESED" cfgVars
+      quotesed = "sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/'" --cfgVal "QUOTESED" cfgVars. the one from config doesnt work for some reason
       nl = cfgVal "NL" cfgVars
       makemo = cfgVal "MAKEMO" cfgVars
       datadir = cfgVal "DATADIR" cfgVars
@@ -64,39 +62,43 @@ build = if isWindows || isMac
       vimtarget = cfgVal "VIMTARGET" cfgVars
       allLibs = cfgVal "ALL_LIBS" cfgVars
       linkAsNeeded = cfgVal "LINK_AS_NEEDED" cfgVars
-      srcdir = cfgVal "srcdir" cfgVars
       cppflags = cfgVal "CPPFLAGS" cfgVars
+      mkdir_p = cfgVal "MKDIR_P" cfgVars
+      osdefCflags = cfgVal "OSDEF_CFLAGS" cfgVars
+      vimrcloc = cfgVal "VIMRCLOC" cfgVars
+      vimRuntimeDir = cfgVal "VIMRUNTIMEDIR" cfgVars
+      allCflags = cfgVal "ALL_CFLAGS" cfgVars
+      compiledby = cfgVal "COMPILEDBY" cfgVars
+      cccterm = cfgVal "CCCTERM" cfgVars
       
   withCmdOptions [Cwd "src"] $ do
-    shcCmd "/bin/sh install-sh -c -d objects"
+    shcCmd $ mkdir_p ++ " objects"
     shcCmd "touch objects/.dirstamp"
-    shcCmd $ "CC=\"" ++ cc ++ " -Iproto " ++ defs ++ " \" srcdir=. sh ./osdef.sh"
+    shcCmd $ "CC=\"" ++ cc ++ " " ++ osdefCflags ++ " \" srcdir=. sh ./osdef.sh"
     cmdSeq ["echo creating auto/pathdef.c"
            ,"echo '/* pathdef.c */' > auto/pathdef.c"
            ,"echo '/* This file is automatically created by Makefile' >> auto/pathdef.c"
            ,"echo ' * DO NOT EDIT! Change Makefile only. */' >> auto/pathdef.c"
            ,"echo '#include \"vim.h\"' >> auto/pathdef.c"
-           ,"echo 'char_u *default_vim_dir = (char_u *)\"" ++ datadir ++ "/vim\";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c"
-           ,"echo 'char_u *default_vimruntime_dir = (char_u *)\"\";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c"
-           ,"echo 'char_u *all_cflags = (char_u *)\"gcc -c -I. -Iproto " ++ defs ++ " " ++ cflags ++ " \";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c"
-           ,"echo 'char_u *all_lflags = (char_u *)\"gcc " ++ ldflags ++ " -o vim " ++ x_pre_libs ++ " " ++ x_libs ++ " " ++ x_extra_libs ++ " " ++ libs ++ " \";' | sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$/\";/' >> auto/pathdef.c"
-           ,"echo 'char_u *compiled_user = (char_u *)\"' | tr -d " ++ nl ++ " >> auto/pathdef.c"
-           ,"if test -n \"\"; then echo \"\" | tr -d " ++ nl ++ " >> auto/pathdef.c; else ((logname) 2>/dev/null || whoami) | tr -d " ++ nl ++ " >> auto/pathdef.c; fi"
+           ,"echo 'char_u *default_vim_dir = (char_u *)\"" ++ vimrcloc ++ "\";' | " ++ quotesed ++ " >> auto/pathdef.c"
+           ,"echo 'char_u *default_vimruntime_dir = (char_u *)\"" ++ vimRuntimeDir ++ "\";' | " ++ quotesed ++ " >> auto/pathdef.c"
+           ,"echo 'char_u *all_cflags = (char_u *)\"" ++ cc ++ " -c -I. " ++ allCflags ++ "\";' | " ++ quotesed ++ " >> auto/pathdef.c"
+           ,"echo 'char_u *all_lflags = (char_u *)\"" ++ cc ++ " " ++ allLibDirs ++ " " ++ ldflags ++ " -o " ++ vimtarget ++ " " ++ allLibs ++ "\";' | " ++ quotesed ++ " >> auto/pathdef.c"
+           ,"echo 'char_u *compiled_user = (char_u *)\"' | tr -d " ++ nl ++ " >> auto/pathdef.c"      
+           ,"if test -n \"" ++ compiledby ++ "\"; then echo \"" ++ compiledby ++ "\" | tr -d " ++ nl ++ " >> auto/pathdef.c; else ((logname) 2>/dev/null || whoami) | tr -d " ++ nl ++ " >> auto/pathdef.c; fi"
            ,"echo '\";' >> auto/pathdef.c"
            ,"echo 'char_u *compiled_sys = (char_u *)\"' | tr -d " ++ nl ++ " >> auto/pathdef.c"
-           ,"if test -z \"\"; then hostname | tr -d " ++ nl ++ " >> auto/pathdef.c; fi"
+           ,"if test -z \"" ++ compiledby ++ "\"; then hostname | tr -d " ++ nl ++ " >> auto/pathdef.c; fi"
            ,"echo '\";' >> auto/pathdef.c"]
     shcCmd "sh ./pathdef.sh"
-    forM_ c1 $ \c -> cmd $ cc ++ " -c -I. -Iproto " ++ defs ++ " " ++ cflags ++ " -o " ++ to0 c ++ " " ++ c
-    forM_ term_src $ \c -> shcCmd $ "gcc -c -I. -Ilibvterm/include -Iproto " ++ defs ++ " " ++ cflags ++ " -DINLINE=\"\" -DVSNPRINTF=vim_vsnprintf -DIS_COMBINING_FUNCTION=utf_iscomposing_uint -DWCWIDTH_FUNCTION=utf_uint2cells -o " ++ to0 c ++ " " ++ c
-
-    --shcCmd $ ccc ++ " version.c -o objects/version.o" -- this is what is in the makefile
+    forM_ c1 $ \c -> cmd $ ccc ++ " -o " ++ to0 c ++ " " ++ c
+    forM_ term_src $ \c -> shcCmd $ cccterm ++ " -o " ++ to0 c ++ " " ++ c
   
     -- should this be replaced with a list? 
     o1 <- liftIO $ getDirectoryFiles "src" ["objects/*.o"]
     shcCmd $ "LINK=\"" ++ purify ++ " " ++ shrpenv ++ " " ++ cclink ++ " " ++ allLibDirs ++ " "
       ++ ldflags ++ " -o " ++ vimtarget ++ " " ++ unwords o1 ++ " " ++ allLibs ++ "\" LINK_AS_NEEDED="
-      ++ linkAsNeeded ++ " sh " ++ srcdir ++ "/link.sh"
+      ++ linkAsNeeded ++ " sh ./link.sh"
     withCmdOptions [Cwd "xxd"] $ do
       shcCmd $ cc ++ " " ++ cppflags ++ " " ++ cflags ++ " " ++ ldflags ++ " -DUNIX -o xxd xxd.c"
     withCmdOptions [Cwd "po"] $ do
@@ -110,9 +112,6 @@ build = if isWindows || isMac
       shcCmd $ "echo " ++ unwords (baseAll po) ++ " | tr \" \" \"\\n\" |sed -e '/\\./d' | sort > LINGUAS"
       shcCmd "msgfmt --desktop -d . --template vim.desktop.in -o vim.desktop"
       cmd "echo Converted submake did nothing"
-
-
-
 
 install :: Run ()
 install = if isWindows || isMac

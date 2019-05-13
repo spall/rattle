@@ -66,7 +66,7 @@ cfgVal s hm = fromMaybe "" $ Map.lookup s hm
 
 -- variables defined in the makefiles
 vars = [("CClink", "${CC}")
-       ,("ALL_CLFAGS", "${PRE_DEFS} ${CFLAGS} ${PROFILE_CFLAGS} ${SANITIZER_CFLAGS} \
+       ,("ALL_CFLAGS", "${PRE_DEFS} ${CFLAGS} ${PROFILE_CFLAGS} ${SANITIZER_CFLAGS} \
                        \ ${LEAK_CFLAGS} ${ABORT_CFLAGS} ${POST_DEFS}")
        ,("CCC", "${CCC_NF} ${ALL_CFLAGS}")
        ,("CCC_NF", "${CC} -c -I${srcdir}")
@@ -78,10 +78,30 @@ vars = [("CClink", "${CC}")
 	             \ ${EXTRA_LIBS} ${LUA_LIBS} ${PERL_LIBS} ${PYTHON_LIBS} \
 	             \ ${PYTHON3_LIBS} ${TCL_LIBS} ${RUBY_LIBS} ${PROFILE_LIBS} \
 	             \ ${SANITIZER_LIBS} ${LEAK_LIBS}")
+       ,("PROFILE_CFLAGS", "")
+       ,("LEAK_CFLAGS", "")
+       ,("ABORT_CFLAGS", "")
+       ,("POST_DEFS", "")
+       ,("EXTRA_IPATHS", "")
+       ,("NONE_DEFS", "")
+       ,("NONE_IPATH", "")
+       ,("PRE_DEFS", "-Iproto $(DEFS) $(GUI_DEFS) $(GUI_IPATH) $(CPPFLAGS) $(EXTRA_IPATHS)")
        ,("NONE_LIBS1", "")
        ,("NONE_LIBS2", "")
        ,("EXTRA_LIBS", "")
        ,("PROFILE_LIBS", "")
        ,("SANITIZER_CFLAGS", "")
        ,("LEAK_LIBS", "")
-       ,("NONE_LIBS_DIR", "")]
+       ,("NONE_LIBS_DIR", "")
+       ,("SHELL", "/bin/sh")
+       ,("MKDIR_P", "$(SHELL) install-sh -c -d")
+       ,("VIMRCLOC", "${VIMLOC}")
+       ,("VIMLOC", "${DATADIR}${VIMDIR}")
+       ,("VIMDIR", "/vim")
+       ,("VTERM_CFLAGS", "-Ilibvterm/include")
+       ,("CCCTERM", "${CCC_NF} ${VTERM_CFLAGS} ${ALL_CFLAGS} -DINLINE=\"\" \
+                    \ -DVSNPRINTF=vim_vsnprintf -DIS_COMBINGING_FUNCTION=utf_iscomposing_uint \
+                    \ -DWCWIDTH_FUNCTION=utf_uint2cells")
+       ,("OSDEF_CFLAGS", "$(PRE_DEFS) $(POST_DEFS)")]
+         
+                    
