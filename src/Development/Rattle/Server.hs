@@ -131,16 +131,16 @@ withRattle options@RattleOptions{..} act = withUI rattleFancyUI (return "Running
             runSpeculate r
             (act r <* saveSpeculate state) `finally` writeVar state (Left Finished)
     attempt1 `catch` \(h :: Hazard) -> do
-        b <- readIORef speculated
-        if not (recoverableHazard h || restartableHazard h) then throwIO h else do
-            -- if we speculated, and we failed with a hazard, try again
-            putStrLn "Warning: Speculation lead to a hazard, retrying without speculation"
-            print h
-            state <- newVar s0
-            withPool rattleProcesses $ \pool -> do
-                let r = Rattle{speculate=[], ..}
-                (act r <* saveSpeculate state) `finally` writeVar state (Left Finished)
-
+        if not (recoverableHazard h || restartableHazard h) then throwIO h
+          else if restartableHazard h
+               then do
+          putStrLn "Warning: Speculation lead to a hazard, retrying without speculation"
+          print h
+          state <- newVar s0
+          withPool rattleProcesses $ \pool -> do
+            let r = Rattle{speculate=[], ..}
+            (act r <* saveSpeculate state) `finally` writeVar state (Left Finished)
+               else error $ "Caught Recoverable hazard [" ++ show h ++ "] at top level."
 
 recoverableHazard :: Hazard -> Bool
 recoverableHazard WriteWriteHazard{} = False
@@ -190,9 +190,32 @@ cmdRattle :: Rattle -> [C.CmdOption] -> [String] -> IO ()
 cmdRattle rattle opts args = cmdRattleRequired rattle $ Cmd (rattleCmdOptions (options rattle) ++ opts) args
 
 cmdRattleRequired :: Rattle -> Cmd -> IO ()
-cmdRattleRequired rattle@Rattle{..} cmd = runPool pool $ do
-    modifyVar_ state $ return . fmap (\s -> s{required = cmd : required s})
-    cmdRattleStart rattle cmd
+cmdRattleRequired rattle@Rattle{..} cmd = runPool pool $
+  catchJust (\(h :: Hazard) -> if recoverableHazard h then Just h else Nothing)
+  (do
+      modifyVar_ state $ return . fmap (\s -> s{required = cmd : required s})
+      cmdRattleStart rattle cmd)
+  (\h@(ReadWriteHazard f c1 c2 Recoverable) -> do
+    if c1 == cmd -- cmd is writer
+      then return () -- do nothing
+      else if c2 /= cmd
+           then error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
+           else -- cmd is reader so we want to re-execute the read now.
+             putStrLn "Caught recoverable hazard" >> cmdRattleRestart rattle cmd)
+
+cmdRattleRestart :: Rattle -> Cmd -> IO ()
+cmdRattleRestart rattle@Rattle{..} cmd = join $ modifyVar state $ \case
+  Left e -> throwProblem e
+  Right s -> cmdRattleRestarted rattle cmd s []
+
+cmdRattleRestarted :: Rattle -> Cmd -> S -> [String] -> IO (Either Problem S, IO ())
+cmdRattleRestarted rattle@Rattle{..} cmd s msgs = do
+  let start = timestamp s
+  s <- return s{timestamp = succ $ timestamp s}
+  hist <- unsafeInterleaveIO $ map (fmap $ first $ expand $ rattleNamedDirs options) <$> getCmdTraces shared cmd
+  go <- once $ cmdRattleRun rattle cmd start hist msgs
+  s <- return s{running = (start, cmd, map (fmap fst) hist) : running s}
+  return (Right s, runSpeculate rattle >> go >> runSpeculate rattle)
 
 cmdRattleStart :: Rattle -> Cmd -> IO ()
 cmdRattleStart rattle@Rattle{..} cmd = join $ modifyVar state $ \case
@@ -308,15 +331,25 @@ cmdRattleFinished rattle@Rattle{..} start cmd trace@Trace{..} save = join $ modi
         let stop = timestamp s
         s <- return s{timestamp = succ $ timestamp s}
         s <- return s{running = filter ((/= start) . fst3) $ running s}
-        s <- return s{pending = [(stop, cmd, trace) | save] ++ pending s}
 
         -- look for hazards
         -- push writes to the end, and reads to the start, because reads before writes is the problem
         let newHazards = Map.fromList $ map ((,(Write,stop ,cmd)) . fst) tWrite ++
                                         map ((,(Read ,start,cmd)) . fst) tRead
         case unionWithKeyEithers (mergeFileOps (required s) (map fst speculate)) (hazard s) newHazards of
-            (ps@(p:_), _) -> return (Left $ Hazard p, print ps >> throwIO p)
+            (ps@(p:_), hazard2) ->
+              case p of
+                (ReadWriteHazard f c1 c2 Recoverable) -> do
+                  s <- return s{hazard = if cmd == c1 -- writer
+                                         then let Just (Write, t2, cmd2) = Map.lookup f newHazards in
+                                                Map.insert f (Write, t2, cmd2) hazard2
+                                         else hazard2}
+                  return (Right s, print ps >> throwIO p)
+                _ -> do
+                  s <- return s{pending = [(stop, cmd, trace) | save] ++ pending s} -- for consistency
+                  return (Left $ Hazard p, print ps >> throwIO p)
             ([], hazard2) -> do
+                s <- return s{pending = [(stop, cmd, trace) | save] ++ pending s}
                 s <- return s{hazard = hazard2}
 
                 -- move people out of pending if they have survived long enough
@@ -327,8 +360,11 @@ cmdRattleFinished rattle@Rattle{..} start cmd trace@Trace{..} save = join $ modi
 
 -- r is required list; s is speculate list
 mergeFileOps :: [Cmd] -> [Cmd] -> FilePath -> (ReadOrWrite, T, Cmd) -> (ReadOrWrite, T, Cmd) -> Either Hazard (ReadOrWrite, T, Cmd)
-mergeFileOps r s x (Read, t1, cmd1) (Read, t2, cmd2) = Right (Read, min t1 t2, if t1 < t2 then cmd1 else cmd2)
+mergeFileOps r s x (Read, t1, cmd1) (Read, t2, cmd2)
+  | cmd1 == cmd2 = Right (Read, max t1 t2, cmd1) -- because the first time is defunct and was redone
+  | otherwise = Right (Read, min t1 t2, if t1 < t2 then cmd1 else cmd2)
 mergeFileOps r s x (Write, t1, cmd1) (Write, t2, cmd2)
+  | cmd1 == cmd2 = Right (Write, max t1 t2, cmd1) -- because the first time is defunct and was redone
   | elem cmd1 r && elem cmd2 r = Left $ WriteWriteHazard x cmd1 cmd2 NonRecoverable
   | otherwise = Left $ WriteWriteHazard x cmd1 cmd2 Restartable -- one write may be an error
 mergeFileOps r s x (Read, t1, cmd1) (Write, t2, cmd2)
