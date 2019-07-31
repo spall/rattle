@@ -195,13 +195,11 @@ cmdRattleRequired rattle@Rattle{..} cmd = runPool pool $
   (do
       modifyVar_ state $ return . fmap (\s -> s{required = cmd : required s})
       cmdRattleStart rattle cmd)
-  (\h@(ReadWriteHazard f c1 c2 Recoverable) -> do
-    if c1 == cmd -- cmd is writer
-      then return () -- do nothing
-      else if c2 /= cmd
-           then error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
-           else -- cmd is reader so we want to re-execute the read now.
-             putStrLn "Caught recoverable hazard" >> cmdRattleRestart rattle cmd)
+  handler
+  where handler h@(ReadWriteHazard f c1 c2 Recoverable)
+          | c1 == cmd = return () -- cmd is writer
+          | c2 == cmd = putStrLn "Caught recoverable hazard locally" >> cmdRattleRestart rattle cmd
+          | otherwise = error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
 
 cmdRattleRestart :: Rattle -> Cmd -> IO ()
 cmdRattleRestart rattle@Rattle{..} cmd = join $ modifyVar state $ \case
@@ -337,17 +335,15 @@ cmdRattleFinished rattle@Rattle{..} start cmd trace@Trace{..} save = join $ modi
         let newHazards = Map.fromList $ map ((,(Write,stop ,cmd)) . fst) tWrite ++
                                         map ((,(Read ,start,cmd)) . fst) tRead
         case unionWithKeyEithers (mergeFileOps (required s) (map fst speculate)) (hazard s) newHazards of
-            (ps@(p:_), hazard2) ->
-              case p of
-                (ReadWriteHazard f c1 c2 Recoverable) -> do
-                  s <- return s{hazard = if cmd == c1 -- writer
-                                         then let Just (Write, t2, cmd2) = Map.lookup f newHazards in
-                                                Map.insert f (Write, t2, cmd2) hazard2
-                                         else hazard2}
-                  return (Right s, print ps >> throwIO p)
-                _ -> do
-                  s <- return s{pending = [(stop, cmd, trace) | save] ++ pending s} -- for consistency
-                  return (Left $ Hazard p, print ps >> throwIO p)
+            (ps@(p@(ReadWriteHazard f c1 c2 Recoverable):_), hazard2) -> do
+              s <- return s{hazard = if cmd == c1 -- writer
+                                     then let Just (Write, t2, cmd2) = Map.lookup f newHazards in
+                                            Map.insert f (Write, t2, cmd2) hazard2
+                                     else hazard2}
+              return (Right s, print ps >> throwIO p)
+            (ps@(p:_), hazard2) -> do
+              s <- return s{pending = [(stop, cmd, trace) | save] ++ pending s} -- for consistency
+              return (Left $ Hazard p, print ps >> throwIO p)
             ([], hazard2) -> do
                 s <- return s{pending = [(stop, cmd, trace) | save] ++ pending s}
                 s <- return s{hazard = hazard2}
