@@ -52,7 +52,8 @@ library
         unordered-containers >= 0.2.7,
         js-dgtable,
         js-flot,
-        js-jquery
+        js-jquery,
+        say
 
     exposed-modules:
         Development.Rattle
@@ -112,7 +113,8 @@ test-suite rattle-test
         unordered-containers >= 0.2.7,
         js-dgtable,
         js-flot,
-        js-jquery
+        js-jquery,
+        say
 
     other-modules:
         Development.Rattle

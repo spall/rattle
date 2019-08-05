@@ -36,7 +36,6 @@ import Data.List.Extra
 import Data.Tuple.Extra
 import System.Time.Extra
 
-
 -- | Type of actions to run. Executed using 'rattle'.
 newtype Run a = Run {fromRun :: ReaderT Rattle IO a}
     deriving (Functor, Applicative, Monad, MonadIO)
@@ -156,7 +155,7 @@ restartableHazard (WriteWriteHazard _ _ _ r) = r == Restartable
 restartableHazard (ReadWriteHazard _ _ _ r) = r == Restartable
 
 runSpeculate :: Rattle -> IO ()
-runSpeculate rattle@Rattle{..} = void $ forkIO $ void $ runPoolMaybe pool $
+runSpeculate rattle@Rattle{..} = void $ forkIO $ void $ hasLocked ("DEADLOCKED on run speculate") $ runPoolMaybe pool $
     -- speculate on a process iff it is the first process in speculate that:
     -- 1) we have some parallelism free
     -- 2) it is the first eligible in the list
@@ -195,17 +194,31 @@ cmdRattle :: Rattle -> [C.CmdOption] -> [String] -> IO ()
 cmdRattle rattle opts args = cmdRattleRequired rattle $ Cmd (rattleCmdOptions (options rattle) ++ opts) args
 
 cmdRattleRequired :: Rattle -> Cmd -> IO ()
-cmdRattleRequired rattle@Rattle{..} cmd = runPool pool $ do
-  modifyVar_ state $ return . fmap (\s -> s{required = cmd : required s})
-  cmdRattleStart rattle cmd
+cmdRattleRequired rattle@Rattle{..} cmd = hasLocked ("DEADLOCKED on cmd rattle required: " ++ show cmd) $ runPool pool $
+  catchJust (\(h :: Hazard) -> if recoverableHazard h then Just h else Nothing)
+  (do
+      modifyVar_ state $ return . fmap (\s -> s{required = cmd : required s})
+      cmdRattleStart rattle cmd)
+  handler
+  where handler h@(ReadWriteHazard f w r Recoverable)
+          | w == cmd = putStrLn "Writer caught a hazard locally" >> return ()
+          | r == cmd = putStrLn "Caught a recoverable hazard locally." >> cmdRattleRestart rattle cmd
+          | otherwise = error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
 
-cmdRattleRestarted :: Rattle -> Cmd -> S -> [String] -> IO (Either Problem S, IO ())
-cmdRattleRestarted rattle@Rattle{..} cmd s msgs = do
-  let start = timestamp s
-  s <- return s{timestamp = succ $ timestamp s}
+cmdRattleRestart :: Rattle -> Cmd -> IO ()
+cmdRattleRestart rattle@Rattle{..} cmd = join $ modifyVar state $ \case
+  Left e -> throwProblem e
+  Right s -> do
+    let start = timestamp s
+    s <- return s{timestamp = succ $ timestamp s}
+    cmdRattleRestarted rattle cmd s [] start
+
+cmdRattleRestarted :: Rattle -> Cmd -> S -> [String] -> T -> IO (Either Problem S, IO ())
+cmdRattleRestarted rattle@Rattle{..} cmd s msgs start = do
   hist <- unsafeInterleaveIO $ map (fmap $ first $ expand $ rattleNamedDirs options) <$> getCmdTraces shared cmd
   go <- once $ cmdRattleRun rattle cmd start hist msgs
   s <- return s{running = (start, cmd, map (fmap fst) hist) : running s}
+  s <- return s{started = Map.insert cmd (NoShow go) $ started s}
   return (Right s, runSpeculate rattle >> go >> runSpeculate rattle)
 
 cmdRattleStart :: Rattle -> Cmd -> IO ()
@@ -219,20 +232,15 @@ cmdRattleStarted rattle@Rattle{..} cmd s msgs = do
     s <- return s{timestamp = succ $ timestamp s}
     case Map.lookup cmd (started s) of
         Just (NoShow wait) -> if Set.member cmd $ recoverable s
-                              then (putStrLn $ "Rerunning " ++ show cmd) >> cmdRattleRestarted rattle cmd s msgs
-                              else catchJust (\(h :: Hazard) -> if recoverableHazard h then Just h else Nothing)
-                                   (return (Right s, wait))
-                                   handler
+                              then (putStrLn $ "Rerunning " ++ show cmd) >> cmdRattleRestarted rattle cmd s msgs start
+                              else return (Right s, wait)
         Nothing -> do
             hist <- unsafeInterleaveIO $ map (fmap $ first $ expand $ rattleNamedDirs options) <$> getCmdTraces shared cmd
             go <- once $ cmdRattleRun rattle cmd start hist msgs
             s <- return s{running = (start, cmd, map (fmap fst) hist) : running s}
             s <- return s{started = Map.insert cmd (NoShow go) $ started s}
             return (Right s, runSpeculate rattle >> go >> runSpeculate rattle)
-      where handler h@(ReadWriteHazard f w r Recoverable)
-              | w == cmd = return (Right s, putStrLn "Writer caught a hazard locally" >> return ())
-              | r == cmd = putStrLn "Caught a recoverable hazard locally." >> cmdRattleRestarted rattle cmd s msgs
-              | otherwise = error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
+
 
 -- either fetch it from the cache or run it)
 cmdRattleRun :: Rattle -> Cmd -> T -> [Trace (FilePath, Hash)] -> [String] -> IO ()
@@ -246,7 +254,7 @@ cmdRattleRun rattle@Rattle{..} cmd@(Cmd opts args) start hist msgs = do
             -- we have something consistent at this point, no work to do
             -- technically we aren't writing to the tWrite part of the trace, but if we don't include that
             -- skipping can turn write/write hazards into read/write hazards
-            cmdRattleFinished rattle start cmd t False
+          cmdRattleFinished rattle start cmd t False
         [] -> do
             -- lets see if any histRead's are also available in the cache
             fetcher <- memoIO $ getFile shared
@@ -335,10 +343,10 @@ cmdRattleFinished rattle@Rattle{..} start cmd trace@Trace{..} save = join $ modi
         -- push writes to the end, and reads to the start, because reads before writes is the problem
         let newHazards = Map.fromList $ map ((,(Write,stop ,cmd, Map.empty)) . fst) tWrite ++
                                         map ((,(Read ,start,cmd, Map.empty)) . fst) tRead
+
         case unionWithKeyEithers (mergeFileOps (required s) (map fst speculate)) (hazard s) newHazards of
           ([], hazard2) -> do
             s <- return s{hazard = hazard2}
-    
             -- move people out of pending if they have survived long enough
             let earliest = minimum $ succ stop : map fst3 (running s)
             (safe, pending) <- return $ partition (\x -> fst3 x < earliest) $ pending s
@@ -390,9 +398,8 @@ cmdRattleFinished rattle@Rattle{..} start cmd trace@Trace{..} save = join $ modi
 mergeFileOps :: [Cmd] -> [Cmd] -> FilePath -> (ReadOrWrite, T, Cmd, Map.HashMap Cmd T) -> (ReadOrWrite, T, Cmd, Map.HashMap Cmd T) -> Either Hazard (ReadOrWrite, T, Cmd, Map.HashMap Cmd T)
 mergeFileOps r s x (Read, t1, cmd1, mp1) (Read, t2, cmd2, mp2)
   | cmd1 == cmd2 = let mp = Map.unionWith max mp1 mp2
-                       (c,t) = f cmd1 (max t1 t2) mp
-                       mp2 = Map.delete c $ Map.insert cmd1 (max t1 t2) mp in
-                     Right (Read, t, c, mp2) -- because the first time is defunct and was redone
+                       (c,t) = f cmd1 (max t1 t2) mp in
+                     Right (Read, t, c, Map.delete c $ Map.insert cmd1 (max t1 t2) mp) -- because the first time is defunct and was redone
   | otherwise = let nmp = Map.unionWith max mp1 mp2 in
                   Right (Read, min t1 t2
                         , if t1 < t2 then cmd1 else cmd2
