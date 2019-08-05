@@ -240,7 +240,10 @@ cmdRattleStarted rattle@Rattle{..} cmd s msgs = do
             s <- return s{running = (start, cmd, map (fmap fst) hist) : running s}
             s <- return s{started = Map.insert cmd (NoShow go) $ started s}
             return (Right s, runSpeculate rattle >> go >> runSpeculate rattle)
-
+      where handler h@(ReadWriteHazard f w r Recoverable)
+              | w == cmd = return (Right s, putStrLn "Writer caught a hazard locally" >> return ())
+              | r == cmd = putStrLn "Caught a recoverable hazard locally." >> cmdRattleRestarted rattle cmd s msgs
+              | otherwise = error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
 
 -- either fetch it from the cache or run it)
 cmdRattleRun :: Rattle -> Cmd -> T -> [Trace (FilePath, Hash)] -> [String] -> IO ()
@@ -347,6 +350,7 @@ cmdRattleFinished rattle@Rattle{..} start cmd trace@Trace{..} save = join $ modi
         case unionWithKeyEithers (mergeFileOps (required s) (map fst speculate)) (hazard s) newHazards of
           ([], hazard2) -> do
             s <- return s{hazard = hazard2}
+
             -- move people out of pending if they have survived long enough
             let earliest = minimum $ succ stop : map fst3 (running s)
             (safe, pending) <- return $ partition (\x -> fst3 x < earliest) $ pending s
