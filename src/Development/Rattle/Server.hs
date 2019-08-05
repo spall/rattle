@@ -162,12 +162,11 @@ runSpeculate rattle@Rattle{..} = void $ forkIO $ void $ runPoolMaybe pool $
     -- 3) not already been started
     -- 4) no read/write conflicts with anything completed
     -- 5) no read conflicts with anything running or any earlier speculation
-    join $ modifyVar state $ \s -> case s of
+  join $ modifyVar state $ \s -> case s of
         Right s | Just cmd <- nextSpeculate rattle s -> do
             writeIORef speculated True
             cmdRattleStarted rattle cmd s ["speculative"]
         _ -> return (s,  return ())
-
 
 nextSpeculate :: Rattle -> S -> Maybe Cmd
 nextSpeculate Rattle{..} S{..}
@@ -194,24 +193,9 @@ cmdRattle :: Rattle -> [C.CmdOption] -> [String] -> IO ()
 cmdRattle rattle opts args = cmdRattleRequired rattle $ Cmd (rattleCmdOptions (options rattle) ++ opts) args
 
 cmdRattleRequired :: Rattle -> Cmd -> IO ()
-cmdRattleRequired rattle@Rattle{..} cmd = runPool pool $
-  catchJust (\(h :: Hazard) -> if recoverableHazard h then Just h else Nothing)
-  (do
-      modifyVar_ state $ return . fmap (\s -> s{required = cmd : required s})
-      cmdRattleStart rattle cmd)
-  handler
-  where handler h@(ReadWriteHazard f w r Recoverable)
-          | w == cmd = putStrLn "Writer caught a hazard locally" >> return ()
-          | r == cmd = putStrLn "Caught a recoverable hazard locally." >> cmdRattleRestart rattle cmd
-          | otherwise = error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
-
-cmdRattleRestart :: Rattle -> Cmd -> IO ()
-cmdRattleRestart rattle@Rattle{..} cmd = join $ modifyVar state $ \case
-  Left e -> throwProblem e
-  Right s -> do
-    let start = timestamp s
-    s <- return s{timestamp = succ $ timestamp s}
-    cmdRattleRestarted rattle cmd s [] start
+cmdRattleRequired rattle@Rattle{..} cmd = runPool pool $ do
+  modifyVar_ state $ return . fmap (\s -> s{required = cmd : required s})
+  cmdRattleStart rattle cmd
 
 cmdRattleRestarted :: Rattle -> Cmd -> S -> [String] -> T -> IO (Either Problem S, IO ())
 cmdRattleRestarted rattle@Rattle{..} cmd s msgs start = do
@@ -233,13 +217,21 @@ cmdRattleStarted rattle@Rattle{..} cmd s msgs = do
     case Map.lookup cmd (started s) of
         Just (NoShow wait) -> if Set.member cmd $ recoverable s
                               then (putStrLn $ "Rerunning " ++ show cmd) >> cmdRattleRestarted rattle cmd s msgs start
-                              else return (Right s, wait)
+                              else catchJust (\(h :: Hazard) -> if recoverableHazard h
+                                                                then Just h
+                                                                else Nothing)
+                                   (return (Right s, wait))
+                                   (handler start)
         Nothing -> do
             hist <- unsafeInterleaveIO $ map (fmap $ first $ expand $ rattleNamedDirs options) <$> getCmdTraces shared cmd
             go <- once $ cmdRattleRun rattle cmd start hist msgs
             s <- return s{running = (start, cmd, map (fmap fst) hist) : running s}
             s <- return s{started = Map.insert cmd (NoShow go) $ started s}
             return (Right s, runSpeculate rattle >> go >> runSpeculate rattle)
+      where handler start h@(ReadWriteHazard f w r Recoverable)
+              | w == cmd = return (Right s, return ())
+              | r == cmd = cmdRattleRestarted rattle cmd s msgs start
+              | otherwise = error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
 
 -- either fetch it from the cache or run it)
 cmdRattleRun :: Rattle -> Cmd -> T -> [Trace (FilePath, Hash)] -> [String] -> IO ()
@@ -370,8 +362,8 @@ cmdRattleFinished rattle@Rattle{..} start cmd trace@Trace{..} save = join $ modi
                 s <- return s{recoverable = Set.union cs $ recoverable s
                              ,hazard = foldl' (f cmd newHazards) hazard2 rs}
                 case rhazard of
-                  Nothing -> return (Right s, print cmd >> print (recoverable s) >> print ps)
-                  Just h -> return (Right s, print cmd >> print (recoverable s) >> print ps >> throwIO h)
+                  Nothing -> return (Right s, print ps)
+                  Just h -> return (Right s, print ps >> throwIO h)
               else do
                 return (Left $ Hazard worst, print ps >> throwIO worst)
           where f cmd nh mp (ReadWriteHazard f c1 c2 Recoverable)
