@@ -155,7 +155,7 @@ restartableHazard (WriteWriteHazard _ _ _ r) = r == Restartable
 restartableHazard (ReadWriteHazard _ _ _ r) = r == Restartable
 
 runSpeculate :: Rattle -> IO ()
-runSpeculate rattle@Rattle{..} = void $ forkIO $ void $ hasLocked ("DEADLOCKED on run speculate") $ runPoolMaybe pool $
+runSpeculate rattle@Rattle{..} = void $ forkIO $ void $ runPoolMaybe pool $
     -- speculate on a process iff it is the first process in speculate that:
     -- 1) we have some parallelism free
     -- 2) it is the first eligible in the list
@@ -194,7 +194,7 @@ cmdRattle :: Rattle -> [C.CmdOption] -> [String] -> IO ()
 cmdRattle rattle opts args = cmdRattleRequired rattle $ Cmd (rattleCmdOptions (options rattle) ++ opts) args
 
 cmdRattleRequired :: Rattle -> Cmd -> IO ()
-cmdRattleRequired rattle@Rattle{..} cmd = hasLocked ("DEADLOCKED on cmd rattle required: " ++ show cmd) $ runPool pool $
+cmdRattleRequired rattle@Rattle{..} cmd = runPool pool $
   catchJust (\(h :: Hazard) -> if recoverableHazard h then Just h else Nothing)
   (do
       modifyVar_ state $ return . fmap (\s -> s{required = cmd : required s})
@@ -240,10 +240,6 @@ cmdRattleStarted rattle@Rattle{..} cmd s msgs = do
             s <- return s{running = (start, cmd, map (fmap fst) hist) : running s}
             s <- return s{started = Map.insert cmd (NoShow go) $ started s}
             return (Right s, runSpeculate rattle >> go >> runSpeculate rattle)
-      where handler h@(ReadWriteHazard f w r Recoverable)
-              | w == cmd = return (Right s, putStrLn "Writer caught a hazard locally" >> return ())
-              | r == cmd = putStrLn "Caught a recoverable hazard locally." >> cmdRattleRestarted rattle cmd s msgs
-              | otherwise = error $ "Caught recoverable hazard [" ++ show h ++ "], but required cmd [" ++ show cmd ++ "] which caught it is not involved."
 
 -- either fetch it from the cache or run it)
 cmdRattleRun :: Rattle -> Cmd -> T -> [Trace (FilePath, Hash)] -> [String] -> IO ()
