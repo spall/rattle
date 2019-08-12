@@ -132,7 +132,7 @@ withRattle options@RattleOptions{..} act = withUI rattleFancyUI (return "Running
     -- first try and run it
     let attempt1 = withPool rattleProcesses $ \pool -> do
             let r = Rattle{..}
-            runSpeculate r
+            runSpeculate r -- need a function that decides what to speculate...
             (act r <* saveSpeculate state) `finally` writeVar state (Left Finished)
     attempt1 `catch` \(h :: Hazard) -> do
         if not (recoverableHazard h || restartableHazard h) then throwIO h
@@ -178,7 +178,8 @@ nextSpeculate Rattle{..} S{..}
 
         step _ [] = Nothing
         step rw ((x,_):xs)
-            | x `Map.member` started = step rw xs -- do not update the rw, since its already covered
+            | x `Map.member` started && (not $ Set.member x recoverable) = step rw xs -- do not update the rw, since its already covered
+            {- basically want to change the above condition to allow failed started commands -}
         step rw@(r, w) ((x, mconcat -> t@Trace{..}):xs)
             | not $ any (\v -> v `Set.member` r || v `Set.member` w || v `Map.member` hazard) tWrite
                 -- if anyone I write has ever been read or written, or might be by an ongoing thing, that would be bad
@@ -216,7 +217,10 @@ cmdRattleStarted rattle@Rattle{..} cmd s msgs = do
     s <- return s{timestamp = succ $ timestamp s}
     case Map.lookup cmd (started s) of
         Just (NoShow wait) -> if Set.member cmd $ recoverable s
-                              then (putStrLn $ "Rerunning " ++ show cmd) >> cmdRattleRestarted rattle cmd s msgs start
+                              then do
+          s <- return s{recoverable = Set.delete cmd $ recoverable s}
+          putStrLn $ "Rerunning " ++ show msgs ++ " " ++ show cmd
+          cmdRattleRestarted rattle cmd s msgs start
                               else catchJust (\(h :: Hazard) -> if recoverableHazard h
                                                                 then Just h
                                                                 else Nothing)
