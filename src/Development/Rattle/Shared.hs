@@ -5,7 +5,7 @@ module Development.Rattle.Shared(
     getFile, setFile,
     getCmdTraces, addCmdTrace,
     nextRun, lastRun,
-    dump
+    dump, hasLocked
     ) where
 
 import General.Extra
@@ -19,7 +19,16 @@ import Data.List
 import Control.Monad.Extra
 import Text.Read
 import Control.Concurrent.Extra
+import Control.Exception
+import Say
 
+
+hasLocked :: String -> IO a -> IO a
+hasLocked msg action =
+  action `catches`
+  [ Handler $ \exc@BlockedIndefinitelyOnMVar -> sayString ("[MVar]: " ++ msg) >> throwIO exc
+  , Handler $ \exc@BlockedIndefinitelyOnSTM -> sayString ("[STM]: " ++ msg) >> throwIO exc
+  ]
 
 ---------------------------------------------------------------------
 -- PRIMITIVES
