@@ -14,6 +14,7 @@ import Development.Rattle
 
 import qualified Test.Example.FSATrace
 import qualified Test.Example.Stack
+import qualified Test.Example.Vim
 import qualified Test.Limit
 import qualified Test.Simple
 import qualified Test.Trace
@@ -24,6 +25,7 @@ tests = let (*) = (,) in
     ,"simple" * Test.Simple.main
     ,"fsatrace" * Test.Example.FSATrace.main
     ,"stack" * Test.Example.Stack.main
+    ,"vim" * Test.Example.Vim.main
     ,"dump" * dump
     ]
 

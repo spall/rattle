@@ -6,7 +6,8 @@ module Test.Type(
     assertWithin,
     (===),
     meetup,
-    testGit
+    testGit,
+    testGitVim
     ) where
 
 import Development.Rattle
@@ -61,3 +62,13 @@ testGit url run = do
     forM_ [10,9..0] $ \i -> do
         cmd_ "git reset --hard" ["origin/master~" ++ show i]
         rattleRun rattleOptions run
+
+-- special test git for vim since fsatrace segfaults. when configuring
+testGitVim :: String -> Run () -> IO ()
+testGitVim url run = do
+  b <- doesDirectoryExist ".git"
+  if b then cmd "git fetch" else cmd_ "git clone" url "."
+  cmd_ ["make", "config"]
+  forM_ [0] $ \i -> do
+    cmd_ "git reset --hard" ["origin/master~" ++ show i]
+    rattleRun rattleOptions run

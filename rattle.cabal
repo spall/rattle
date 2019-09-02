@@ -136,6 +136,9 @@ test-suite rattle-test
         Paths_rattle
         Test.Example.FSATrace
         Test.Example.Stack
+        Test.Example.Vim
+        Test.Example.VimVariables
+        Test.Example.CmdHelpers
         Test.Simple
         Test.Trace
         Test.Limit
