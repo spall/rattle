@@ -6,11 +6,13 @@ module Test.Example.OpensslVariables
    lib_cflags, lib_cppflags, ar, arflags, ranlib, lib_ldflags, lib_ex_libs,
    installtop, libdir, version, dso_cflags, dso_cppflags, dso_ldflags,
    dso_ex_libs, perlasm_scheme, fips_objs, legacy_objs, libssl_objs,
-   libtestutil_objs, libsslso_objs
+   libtestutil_objs, libsslso_objs, platform, cppflags_q
   ) where
 
 import Development.Shake.FilePath
 
+cppflags_q = "-DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DNDEBUG -DOPENSSL_IA32_SSE2"
+platform = "linux-x86_64"
 version = "3.0.0-dev"
 srcdir = "."
 blddir = "."
@@ -20,7 +22,7 @@ bin_ldflags = unwords [cnf_ldflags, ldflags]
 bin_cflags = unwords [cnf_cflags, cflags]
 cross_compile = ""
 cc = cross_compile ++ "gcc"
-cflags = "-Wall -03"
+cflags = "-Wall -O3"
 cnf_cflags = "-pthread -m64 -Wa,--noexecstack"
 ldflags = ""
 cnf_ldflags = ""
@@ -30,14 +32,15 @@ bin_cppflags = unwords [cnf_cppflags, cppflags]
 cnf_cppflags = "-DNDEBUG -DOPENSSL_IA32_SSE2"
 cppflags = ""
 lib_cflags = unwords ["-fPIC", cnf_cflags, cflags]
-lib_cppflags = unwords ["-DOPENSSL_USE_NODELETE", "-DL_ENDIAN", "-DOPENSSL_PIC", "-DOPENSSLDIR=\"" ++ openssldir ++ "\"", "-DENGINESDIR=\"" ++ enginesdir ++ "\"", "-DMODULESDIR=\"" ++ modulesdir ++ "\"", cnf_cppflags, cppflags]
+lib_cppflags = unwords ["-DOPENSSL_USE_NODELETE", "-DL_ENDIAN", "-DOPENSSL_PIC", "-DOPENSSLDIR=\"\\\"" ++ openssldir ++ "\\\"\"", "-DENGINESDIR=\"\\\"" ++ enginesdir ++ "\\\"\"", "-DMODULESDIR=\"\\\"" ++ modulesdir ++ "\\\"\"", cnf_cppflags, cppflags]
 ar = cross_compile ++ "ar"
 arflags = "r"
 ranlib = cross_compile ++ "ranlib"
 enginesdir = libdir </> "engines-3"
-openssldir = "user/local/ssl"
+openssldir = "/usr/local/ssl"
 modulesdir = libdir </> "ossl-modules"
-libdir = "lib"
+libdir_ = "lib64"
+libdir = installtop </> libdir_
 lib_ldflags = unwords ["-Wl,-znodelete", "-shared", "-Wl,-Bsymbolic", cnf_ldflags, ldflags]
 lib_ex_libs = unwords [cnf_ex_libs, ex_libs]
 installtop = "/usr/local"
@@ -521,6 +524,6 @@ programs3 = [("test/asynciotest", test_asynciotest_objs), ("test/bad_dtls_test",
 
 libssl_objs = ["crypto/libssl-lib-packet.o", "ssl/libssl-lib-bio_ssl.o", "ssl/libssl-lib-d1_lib.o", "ssl/libssl-lib-d1_msg.o", "ssl/libssl-lib-d1_srtp.o", "ssl/libssl-lib-methods.o", "ssl/libssl-lib-pqueue.o", "ssl/libssl-lib-s3_cbc.o", "ssl/libssl-lib-s3_enc.o", "ssl/libssl-lib-s3_lib.o", "ssl/libssl-lib-s3_msg.o", "ssl/libssl-lib-ssl_asn1.o", "ssl/libssl-lib-ssl_cert.o", "ssl/libssl-lib-ssl_ciph.o", "ssl/libssl-lib-ssl_conf.o", "ssl/libssl-lib-ssl_err.o", "ssl/libssl-lib-ssl_init.o", "ssl/libssl-lib-ssl_lib.o", "ssl/libssl-lib-ssl_mcnf.o", "ssl/libssl-lib-ssl_rsa.o", "ssl/libssl-lib-ssl_sess.o", "ssl/libssl-lib-ssl_stat.o", "ssl/libssl-lib-ssl_txt.o", "ssl/libssl-lib-ssl_utst.o", "ssl/libssl-lib-t1_enc.o", "ssl/libssl-lib-t1_lib.o", "ssl/libssl-lib-t1_trce.o", "ssl/libssl-lib-tls13_enc.o", "ssl/libssl-lib-tls_srp.o", "ssl/record/libssl-lib-dtls1_bitmap.o", "ssl/record/libssl-lib-rec_layer_d1.o", "ssl/record/libssl-lib-rec_layer_s3.o", "ssl/record/libssl-lib-ssl3_buffer.o", "ssl/record/libssl-lib-ssl3_record.o", "ssl/record/libssl-lib-ssl3_record_tls13.o", "ssl/statem/libssl-lib-extensions.o", "ssl/statem/libssl-lib-extensions_clnt.o", "ssl/statem/libssl-lib-extensions_cust.o", "ssl/statem/libssl-lib-extensions_srvr.o", "ssl/statem/libssl-lib-statem.o", "ssl/statem/libssl-lib-statem_clnt.o", "ssl/statem/libssl-lib-statem_dtls.o", "ssl/statem/libssl-lib-statem_lib.o", "ssl/statem/libssl-lib-statem_srvr.o"]
 
-libtestutil_objs = ["apps/libtestutil-lib-bf_prefix.o", "apps/libtestutil-lib-opt.o", "test/testutil/libtestutil-lib-apps_mem.o", "test/testutil/libtestutil-lib-basic_output.o", "test/testutil/libtestutil-lib-cb.o", "test/testutil/libtestutil-lib-driver.o", "test/testutil/libtestutil-lib-format_output.o", "test/testutil/libtestutil-lib-init.o", "test/testutil/libtestutil-lib-main.o", "test/testutil/libtestutil-lib-options.o", "test/testutil/libtestutil-lib-output_helpers.o", "test/testutil/libtestutil-lib-random.o", "test/testutil/libtestutil-lib-stanza.o", "test/testutil/libtestutil-lib-tap_bio.o", "test/testutil/libtestutil-lib-test_cleanup.o", "test/testutil/libtestutil-lib-test_options.o", "test/testutil/libtestutil-lib-tests.o"]
+libtestutil_objs = ["apps/lib/libtestutil-lib-bf_prefix.o", "apps/lib/libtestutil-lib-opt.o", "test/testutil/libtestutil-lib-apps_mem.o", "test/testutil/libtestutil-lib-basic_output.o", "test/testutil/libtestutil-lib-cb.o", "test/testutil/libtestutil-lib-driver.o", "test/testutil/libtestutil-lib-format_output.o", "test/testutil/libtestutil-lib-init.o", "test/testutil/libtestutil-lib-main.o", "test/testutil/libtestutil-lib-options.o", "test/testutil/libtestutil-lib-output_helpers.o", "test/testutil/libtestutil-lib-random.o", "test/testutil/libtestutil-lib-stanza.o", "test/testutil/libtestutil-lib-tap_bio.o", "test/testutil/libtestutil-lib-test_cleanup.o", "test/testutil/libtestutil-lib-test_options.o", "test/testutil/libtestutil-lib-tests.o"]
 
-libsslso_objs = ["crypto/libssl-shlib-packet.o", "ssl/libssl-shlib-bio_ssl.o", "ssl/libssl-shlib-d1_lib.o", "ssl/libssl-shlib-d1_msg.o", "ssl/libssl-shlib-d1_srtp.o", "ssl/libssl-shlib-methods.o", "ssl/libssl-shlib-pqueue.o", "ssl/libssl-shlib-s3_cbc.o", "ssl/libssl-shlib-s3_enc.o", "ssl/libssl-shlib-s3_lib.o", "ssl/libssl-shlib-s3_msg.o", "ssl/libssl-shlib-ssl_asn1.o", "ssl/libssl-shlib-ssl_cert.o", "ssl/libssl-shlib-ssl_ciph.o", "ssl/libssl-shlib-ssl_conf.o", "ssl/libssl-shlib-ssl_err.o", "ssl/libssl-shlib-ssl_init.o", "ssl/libssl-shlib-ssl_lib.o", "ssl/libssl-shlib-ssl_mcnf.o", "ssl/libssl-shlib-ssl_rsa.o", "ssl/libssl-shlib-ssl_sess.o", "ssl/libssl-shlib-ssl_stat.o", "ssl/libssl-shlib-ssl_txt.o", "ssl/libssl-shlib-ssl_utst.o", "ssl/libssl-shlib-t1_enc.o", "ssl/libssl-shlib-t1_lib.o", "ssl/libssl-shlib-t1_trce.o", "ssl/libssl-shlib-tls13_enc.o", "ssl/libssl-shlib-tls_srp.o", "ssl/record/libssl-shlib-dtls1_bitmap.o", "ssl/record/libssl-shlib-rec_layer_d1.o", "ssl/record/libssl-shlib-rec_layer_s3.o", "ssl/record/libssl-shlib-ssl3_buffer.o", "ssl/record/libssl-shlib-ssl3_record.o", "ssl/record/libssl-shlib-ssl3_record_tls13.o", "ssl/statem/libssl-shlib-extensions.o", "ssl/statem/libssl-shlib-extensions_clnt.o", "ssl/statem/libssl-shlib-extensions_cust.o", "ssl/statem/libssl-shlib-extensions_srvr.o", "ssl/statem/libssl-shlib-statem.o", "ssl/statem/libssl-shlib-statem_clnt.o", "ssl/statem/libssl-shlib-statem_dtls.o", "ssl/statem/libssl-shlib-statem_lib.o", "ssl/statem/libssl-shlib-statem_srvr.o", "libssl.ld libcrypto.so"]
+libsslso_objs = ["crypto/libssl-shlib-packet.o", "ssl/libssl-shlib-bio_ssl.o", "ssl/libssl-shlib-d1_lib.o", "ssl/libssl-shlib-d1_msg.o", "ssl/libssl-shlib-d1_srtp.o", "ssl/libssl-shlib-methods.o", "ssl/libssl-shlib-pqueue.o", "ssl/libssl-shlib-s3_cbc.o", "ssl/libssl-shlib-s3_enc.o", "ssl/libssl-shlib-s3_lib.o", "ssl/libssl-shlib-s3_msg.o", "ssl/libssl-shlib-ssl_asn1.o", "ssl/libssl-shlib-ssl_cert.o", "ssl/libssl-shlib-ssl_ciph.o", "ssl/libssl-shlib-ssl_conf.o", "ssl/libssl-shlib-ssl_err.o", "ssl/libssl-shlib-ssl_init.o", "ssl/libssl-shlib-ssl_lib.o", "ssl/libssl-shlib-ssl_mcnf.o", "ssl/libssl-shlib-ssl_rsa.o", "ssl/libssl-shlib-ssl_sess.o", "ssl/libssl-shlib-ssl_stat.o", "ssl/libssl-shlib-ssl_txt.o", "ssl/libssl-shlib-ssl_utst.o", "ssl/libssl-shlib-t1_enc.o", "ssl/libssl-shlib-t1_lib.o", "ssl/libssl-shlib-t1_trce.o", "ssl/libssl-shlib-tls13_enc.o", "ssl/libssl-shlib-tls_srp.o", "ssl/record/libssl-shlib-dtls1_bitmap.o", "ssl/record/libssl-shlib-rec_layer_d1.o", "ssl/record/libssl-shlib-rec_layer_s3.o", "ssl/record/libssl-shlib-ssl3_buffer.o", "ssl/record/libssl-shlib-ssl3_record.o", "ssl/record/libssl-shlib-ssl3_record_tls13.o", "ssl/statem/libssl-shlib-extensions.o", "ssl/statem/libssl-shlib-extensions_clnt.o", "ssl/statem/libssl-shlib-extensions_cust.o", "ssl/statem/libssl-shlib-extensions_srvr.o", "ssl/statem/libssl-shlib-statem.o", "ssl/statem/libssl-shlib-statem_clnt.o", "ssl/statem/libssl-shlib-statem_dtls.o", "ssl/statem/libssl-shlib-statem_lib.o", "ssl/statem/libssl-shlib-statem_srvr.o"]

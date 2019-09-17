@@ -6,7 +6,8 @@ module Test.Type(
     assertWithin,
     (===),
     meetup,
-    testGit
+    testGit,
+    testGitConfig
     ) where
 
 import Development.Rattle
@@ -61,3 +62,12 @@ testGit url run = do
     forM_ [10,9..0] $ \i -> do
         cmd_ "git reset --hard" ["origin/master~" ++ show i]
         rattleRun rattleOptions run
+
+testGitConfig :: String -> IO () -> Run () -> IO ()
+testGitConfig url config run = do
+  b <- doesDirectoryExist ".git"
+  if b then cmd "git fetch" else cmd_ "git clone" url "."
+  config
+  forM_ [10,9..0] $ \i -> do
+    cmd_ "git reset --hard" ["origin/master~" ++ show i]
+    rattleRun rattleOptions run

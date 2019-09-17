@@ -10,6 +10,7 @@ import Test.Example.CmdHelpers
 import Development.Shake.FilePath
 import Development.Shake.Command
 import Control.Monad
+import Data.List
 
 main :: IO ()
 main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
@@ -21,7 +22,7 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
   --configdata.pm
   cmd $ unwords [perl, "configdata.pm", "-r"]
   -- crypto/include/internal/bn_conf.h.in  configdata.pm
-  forM_ generated_mandatory (\f -> cmd $ unwords [perl, "\"I" ++ blddir ++ "\"", "-Mconfigdata"
+  forM_ generated_mandatory (\f -> shcCmd $ unwords [perl, "\"-I" ++ blddir ++ "\"", "-Mconfigdata"
                                                  ,"\"util/dofile.pl\"", "\"-oMakefile\""
                                                  , f <.> ".in", ">", f])
   --make depend
@@ -44,33 +45,129 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
                  "then rm -f " ++ dtmp ++
                  "; else mv " ++ dtmp ++ " " ++ d ++ "; fi"]
 
-  let libapps = [("apps/lib/lib/libapps-lib-app_params.o", "apps/lib/app_params.c")
-                ,("apps/libapps-lib-app_rand.o", "apps/app_rand.c")
-                ,("apps/libapps-lib-apps.o", "apps/apps.c")
-                ,("apps/libapps-lib-apps_ui.o", "apps/apps_ui.c")
-                ,("apps/libapps-lib-bf_prefix.o", "apps/bf_prefix.c")
-                ,("apps/libapps-lib-columns.o", "apps/columns.c")
-                ,("apps/libapps-lib-fmt.o", "apps/fmt.c")
-                ,("apps/libapps-lib-opt.o", "apps/opt.c")
-                ,("apps/libapps-lib-s_cb.o", "apps/s_cb.c")
-                ,("apps/libapps-lib-s_socket.o", "apps/s_socket.c")]
+  let libapps = [("apps/lib/libapps-lib-app_params.o", "apps/lib/app_params.c")
+                ,("apps/libapps-lib-app_rand.o", "apps/lib/app_rand.c")
+                ,("apps/libapps-lib-apps.o", "apps/lib/apps.c")
+                ,("apps/libapps-lib-apps_ui.o", "apps/lib/apps_ui.c")
+                ,("apps/libapps-lib-bf_prefix.o", "apps/lib/bf_prefix.c")
+                ,("apps/libapps-lib-columns.o", "apps/lib/columns.c")
+                ,("apps/libapps-lib-fmt.o", "apps/lib/fmt.c")
+                ,("apps/libapps-lib-opt.o", "apps/lib/opt.c")
+                ,("apps/libapps-lib-s_cb.o", "apps/lib/s_cb.c")
+                ,("apps/libapps-lib-s_socket.o", "apps/lib/s_socket.c")]
 
   forM_ libapps build_libapp
   -- done with prereqs of apps/libapps.a
-  cmd $ unwords [ar, arflags, "apps/libapps.a", unwords $ map fst libapps] -- makefile says only libapps that have changed, but not sure how to specify that here; or if its worth it
-  cmd $ unwords [ranlib, "apps/libapps.a", "|| echo Never mind."]
+  seqCmds [unwords [ar, arflags, "apps/libapps.a", unwords $ map fst libapps] -- makefile says only libapps that have changed, but not sure how to specify that here; or if its worth it
+          ,unwords [ranlib, "apps/libapps.a", "|| echo Never mind."]]
 
+  -- tODO: make sure libcrypto_objs are built.
+
+  let build_s_file (s,pl) = shcCmd $ unwords ["CC=\"" ++ cc ++ "\"", perl, pl, perlasm_scheme, s]
+
+  let build_s_dso_obj_file o = let s = f o in
+                                 cmd $ unwords [cc, dso_cflags, dso_cppflags, "-c", "-o", o, s]
+        where f o = let (Just x) = stripPrefix "fips-dso-" $ takeBaseName o in
+                      replaceFileName o (x <.> "s")
+  
+  let build_s_lib_obj_file o = let s = f o in
+                             cmd $ unwords [cc, lib_cflags, lib_cppflags, "-c", "-o", o, s]
+        where f o = let (Just x) = g $ takeBaseName o in
+                      replaceFileName o (x <.> "s")
+              g bn | isPrefixOf "libcrypto-lib-" bn = stripPrefix "libcrypto-lib-" bn
+                   | isPrefixOf "libcrypto-shlib-" bn = stripPrefix "libcrypto-shlib-" bn
+                   | otherwise = error $ "basename is " ++ show bn
+
+  forM_ libcrypto_s build_s_file
+
+  forM_ (libcrypto_s_lib_objs ++ libcryptoso3_s_lib_objs) build_s_lib_obj_file
+  forM_ libcrypto_s_dso_objs build_s_dso_obj_file
+
+
+-- crypto/aes/libcrypto-lib-aes_cfb.o
+  let build_crypto_aes ef o = let c = f o
+                                  dtmp = o -<.> "d.tmp"
+                                  d = o -<.> "d" in   
+                                seqCmds [unwords [cc, ef, "-I.", "-Icrypto/include", "-Iinclude", "-Iproviders/common/include"
+                                                 ,"-Iproviders/default/include", "-Iproviders/common/ciphers", "-Icrypto"
+                                                 ,"-Iproviders/common/macs", "-Iproviders/common/kdfs", "-Iproviders/default/macs"
+                                                 ,"-Iproviders/default/ciphers", "-Iproviders/default/kdfs", "-DAES_ASM"
+                                                 ,"-DBSAES_ASM", "-DECP_NISTZ256_ASM", "-DGHASH_ASM", "-DKECCAK1600_ASM", "-DMD5_ASM"
+                                                 ,"-DOPENSSL_BN_ASM_GF2m", "-DOPENSSL_BN_ASM_MONT", "-DOPENSSL_BN_ASM_MONT5"
+                                                 ,"-DOPENSSL_CPUID_OBJ", "-DPOLY1305_ASM", "-DSHA1_ASM", "-DSHA256_ASM", "-DSHA512_ASM", "-DVAES_ASM"
+                                                 ,"-DWHIRlPOOL_ASM", "-DX25519_ASM", lib_cflags, lib_cppflags, "-MMD", "-MF"
+                                                 , dtmp, "-MT", o, "-c", "-o", o, c]
+                                        ,unwords ["touch", dtmp]
+                                        ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
+                                                 ,"then", "rm", "-f", dtmp, "else", "mv", dtmp, d ++ ";", "fi"]]
+        where f o = let (Just x) = g $ takeBaseName o in
+                      replaceFileName o (x <.> "c")
+              g bn | isPrefixOf "libcrypto-lib-" bn = stripPrefix "libcrypto-lib-" bn
+                   | isPrefixOf "libcrypto-shlib-" bn = stripPrefix "libcrypto-shlib-" bn
+                   | isPrefixOf "fips-dso-" bn = stripPrefix "fips-dso-" bn
+                   | otherwise = error $ "basename is " ++ show bn
+
+-- crypto/aes/libcrypto-lib-aes_ecb.o
+-- crypto/aes/libcrypto-lib-aes_ige.o
+
+  -- crypto/buildinf.h: util/mkbuildinf.pl configdata.pm
+  shcCmd $ unwords [perl, "util/mkbuildinf.pl", "\"" ++ cc, lib_cflags, cppflags_q ++ "\"", "\"" ++ platform ++ "\"", ">", "crypto/buildinf.h"]
+  
+  (build_crypto_aes "") "crypto/libcrypto-lib-cversion.o"
+  
+  forM_ (libcrypto_c_objs ++ libcryptoso3_c_objs) (build_crypto_aes "")
+  forM_ libcrypto_c_2_objs (build_crypto_aes "-Icrypto/ec/curve448/arch_32 -Icrypto/ec/curve448")
+  
+
+  -- libssl_objs
+  let build_libssl_obj o = let c = f o
+                               dtmp = o -<.> "d.tmp"
+                               d = o -<.> "d" in
+        seqCmds [unwords [cc, "-I.", "-Iinclude", "-DAES_ASM", lib_cflags, lib_cppflags, "-MMD"
+                         ,"-MF",dtmp, "-MT", o, "-c", "-o", o, c]
+                ,unwords ["touch", dtmp]
+                ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;",
+                          "then", "rm", "-f", dtmp ++ ";", "else", "mv", dtmp, d ++ ";", "fi"]]
+        where f o = let (Just x) = g $ takeBaseName o in
+                      replaceFileName o (x <.> "c")
+              g bn | isPrefixOf "libssl-lib-" bn = stripPrefix "libssl-lib-" bn
+                   | isPrefixOf "libssl-shlib-" bn = stripPrefix "libssl-shlib-" bn
+                   | otherwise = error $ "basename is " ++ show bn
+                   
+  forM_ libssl_objs build_libssl_obj
+
+  -- libtestutil_objs
+  let build_libtestutil_obj o = let c = f o
+                                    dtmp = o -<.> "d.tmp"
+                                    d = o -<.> "d" in
+        seqCmds [unwords [cc, "-Iinclude", "-Iapps/include", "-I." , lib_cflags, lib_cppflags, "-MMD"
+                         ,"-MF",dtmp, "-MT", o, "-c", "-o", o, c]
+                ,unwords ["touch", dtmp]
+                ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;",
+                          "then", "rm", "-f", dtmp ++ ";", "else", "mv", dtmp, d ++ ";", "fi"]]
+        where f o = let (Just x) = g $ takeBaseName o in
+                      replaceFileName o (x <.> "c")
+              g bn | isPrefixOf "libtestutil-lib-" bn = stripPrefix "libtestutil-lib-" bn
+                   | otherwise = error $ "basename is " ++ show bn
+  forM_ libtestutil_objs build_libtestutil_obj
+
+  -- libcryptoso3_objs
+
+  -- libsslso_objs
+  forM_ libsslso_objs build_libssl_obj
+
+  
   -- libcrypto.a": depends on 1 million object files
-  cmd $ unwords [ar, arflags, "libcrypto.a", unwords libcrypto_objs] -- ditto about changed ons
-  cmd $ unwords [ranlib, "libcrypto.a", "|| echo Never mind."]
+  seqCmds [unwords [ar, arflags, "libcrypto.a", unwords libcrypto_objs] -- ditto about changed ons
+          ,unwords [ranlib, "libcrypto.a", "|| echo Never mind."]]
 
   -- libssl.a"
-  cmd $ unwords [ar, arflags, "libssl.a", unwords libssl_objs] -- ditto
-  cmd $ unwords [ranlib, "libssl.a", "|| echo Never mind."]
+  seqCmds [unwords [ar, arflags, "libssl.a", unwords libssl_objs] -- ditto
+          ,unwords [ranlib, "libssl.a", "|| echo Never mind."]]
 
   -- test/libtestutil.a
-  cmd $ unwords [ar, arflags, "test/libtestutil.a", unwords libtestutil_objs] -- ditto
-  cmd $ unwords [ranlib, "test/libtestutil.a", "|| echo Never mind."]
+  seqCmds [unwords [ar, arflags, "test/libtestutil.a", unwords libtestutil_objs] -- ditto
+          ,unwords [ranlib, "test/libtestutil.a", "|| echo Never mind."]]
 
   --libcrypto.so.3: depends on 1 million object files
   cmd $ unwords [cc, lib_cflags, "-L.", lib_ldflags, "-Wl,-soname=libcrypto.so.3", "-o"
@@ -266,7 +363,11 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
         seqCmds ["rm -f " ++ p
                 ,unwords ["${" ++ "LDCMD" ++ ":-" ++ cc ++ "}", bin_cflags, "-L.", bin_ldflags
                          ,"-o", unwords os, "-lssl", "test/libtestutil.a", "-lcrypto", bin_ex_libs]]
--- libssl.a!!!!!!!!!
+
+-- -Icrypto/ec/curve448/arch_32 -Icrypto/ec/curve448
+
+
+  -- libssl.a!!!!!!!!!
   forM_ programs build_program
   forM_ programs2 build_program2
   forM_ programs3 build_program3
