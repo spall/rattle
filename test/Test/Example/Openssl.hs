@@ -419,6 +419,8 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
   build_obj3 "-I. -Iinclude -Icrypto/include -Icrypto/bn -Iapps/include" "test/bn_internal_test-bin-bn_internal_test.o"
   forM_ test_objs_5 (build_obj3 "-I. -Iinclude -Iapps/include -Icrypto/ec/curve448")
   forM_ test_objs_4 (build_obj3 "-I. -Iinclude -Iapps/include -Icrypto/include")
+  forM_ test_objs_6 (build_obj3 "-Iinclude -Iapps/include -Itest -I. -Icrypto/include")
+
   --forM_ fuzz_asn1_test_objs build_obj2
   --forM_ fuzz_asn1parse_test_objs build_obj2
   

@@ -7,7 +7,8 @@ module Test.Example.OpensslVariables
    installtop, libdir, version, dso_cflags, dso_cppflags, dso_ldflags,
    dso_ex_libs, perlasm_scheme, fips_objs, legacy_objs, libssl_objs,
    libtestutil_objs, libsslso_objs, platform, cppflags_q, fips_dso_objs,
-   test_objs_1, test_objs_2, test_objs_3, test_c, test_objs_4, test_objs_5
+   test_objs_1, test_objs_2, test_objs_3, test_c, test_objs_4, test_objs_5,
+  test_objs_6
   ) where
 
 import Development.Shake.FilePath
@@ -243,6 +244,10 @@ test_objs_3 = ["test/buildtest_c_aes-bin-buildtest_aes.o", "test/buildtest_c_asn
 test_objs_4 = ["test/asn1_dsa_internal_test-bin-asn1_dsa_internal_test.o", "test/asn1_internal_test-bin-asn1_internal_test.o", "test/chacha_internal_test-bin-chacha_internal_test.o", "test/ctype_internal_test-bin-ctype_internal_test.o", "test/modes_internal_test-bin-modes_internal_test.o", "test/poly1305_internal_test-bin-poly1305_internal_test.o", "test/siphash_internal_test-bin-siphash_internal_test.o", "test/sm4_internal_test-bin-sm4_internal_test.o"]
 
 test_objs_5 = ["test/curve448_internal_test-bin-curve448_internal_test.o"] -- -I. -Iinclude -Iapps/include -Icrypto/ec/curve448
+
+-- -Iinclude -Iapps/include -Itest -I. -Icrypto/include
+test_objs_6 = ["test/drbg_cavs_test-bin-drbg_cavs_data_ctr.o", "test/drbg_cavs_test-bin-drbg_cavs_data_hash.o", "test/drbg_cavs_test-bin-drbg_cavs_data_hmac.o"
+              ,"test/drbg_cavs_test-bin-drbg_cavs_test.o"]
 
 test_aborttest_objs = ["test/aborttest-bin-aborttest.o"] 
 test_aesgcmtest_objs = ["test/aesgcmtest-bin-aesgcmtest.o", "test/libtestutil.a"] -- -I. 
