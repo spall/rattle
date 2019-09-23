@@ -15,6 +15,7 @@ import qualified Data.HashSet as Set
 
 main :: IO ()
 main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
+
   let generated_mandatory = ["crypto/include/internal/bn_conf.h" --
                             ,"crypto/include/internal/dso_conf.h"
                             ,"doc/man7/openssl_user_macros.pod", "include/openssl/opensslconf.h"
@@ -416,6 +417,7 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
   forM_ test_objs_2 (build_obj3 "-Iinclude -Iapps/include")
   forM_ test_objs_3 (build_obj3 "-Iinclude")
   build_obj3 "-I. -Iinclude -Icrypto/include -Icrypto/bn -Iapps/include" "test/bn_internal_test-bin-bn_internal_test.o"
+  forM_ test_objs_5 (build_obj3 "-I. -Iinclude -Iapps/include -Icrypto/ec/curve448")
   forM_ test_objs_4 (build_obj3 "-I. -Iinclude -Iapps/include -Icrypto/include")
   --forM_ fuzz_asn1_test_objs build_obj2
   --forM_ fuzz_asn1parse_test_objs build_obj2
