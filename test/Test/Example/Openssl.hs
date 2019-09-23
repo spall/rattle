@@ -11,6 +11,7 @@ import Development.Shake.FilePath
 import Development.Shake.Command
 import Control.Monad
 import Data.List
+import qualified Data.HashSet as Set
 
 main :: IO ()
 main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
@@ -56,6 +57,9 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
                 ,("apps/libapps-lib-s_cb.o", "apps/lib/s_cb.c")
                 ,("apps/libapps-lib-s_socket.o", "apps/lib/s_socket.c")]
 
+  
+  shcCmd $ unwords [perl, "crypto/bn/bn_prime.pl", ">", "crypto/bn/bn_prime.h"]
+  
   forM_ libapps build_libapp
   -- done with prereqs of apps/libapps.a
   seqCmds [unwords [ar, arflags, "apps/libapps.a", unwords $ map fst libapps] -- makefile says only libapps that have changed, but not sure how to specify that here; or if its worth it
@@ -85,39 +89,64 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
 
 
 -- crypto/aes/libcrypto-lib-aes_cfb.o
-  let build_crypto_aes ef o = let c = f o
-                                  dtmp = o -<.> "d.tmp"
-                                  d = o -<.> "d" in   
-                                seqCmds [unwords [cc, ef, "-I.", "-Icrypto/include", "-Iinclude", "-Iproviders/common/include"
-                                                 ,"-Iproviders/default/include", "-Iproviders/common/ciphers", "-Icrypto"
-                                                 ,"-Iproviders/common/macs", "-Iproviders/common/kdfs", "-Iproviders/default/macs"
-                                                 ,"-Iproviders/default/ciphers", "-Iproviders/default/kdfs", "-DAES_ASM"
-                                                 ,"-DBSAES_ASM", "-DECP_NISTZ256_ASM", "-DGHASH_ASM", "-DKECCAK1600_ASM", "-DMD5_ASM"
-                                                 ,"-DOPENSSL_BN_ASM_GF2m", "-DOPENSSL_BN_ASM_MONT", "-DOPENSSL_BN_ASM_MONT5"
-                                                 ,"-DOPENSSL_CPUID_OBJ", "-DPOLY1305_ASM", "-DSHA1_ASM", "-DSHA256_ASM", "-DSHA512_ASM", "-DVAES_ASM"
-                                                 ,"-DWHIRlPOOL_ASM", "-DX25519_ASM", lib_cflags, lib_cppflags, "-MMD", "-MF"
-                                                 , dtmp, "-MT", o, "-c", "-o", o, c]
-                                        ,unwords ["touch", dtmp]
-                                        ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
-                                                 ,"then", "rm", "-f", dtmp, "else", "mv", dtmp, d ++ ";", "fi"]]
+  let build_libcrypto ef o = let c = f o
+                                 dtmp = o -<.> "d.tmp"
+                                 d = o -<.> "d" in   
+                               seqCmds [unwords [cc, ef, "-I.", "-Icrypto/include", "-Iinclude", "-Iproviders/common/include"
+                                                ,"-Iproviders/default/include", "-Iproviders/common/ciphers", "-Icrypto"
+                                                ,"-Iproviders/common/macs", "-Iproviders/common/kdfs", "-Iproviders/default/macs"
+                                                ,"-Iproviders/default/ciphers", "-Iproviders/default/kdfs", "-DAES_ASM"
+                                                ,"-DBSAES_ASM", "-DECP_NISTZ256_ASM", "-DGHASH_ASM", "-DKECCAK1600_ASM", "-DMD5_ASM"
+                                                ,"-DOPENSSL_BN_ASM_GF2m", "-DOPENSSL_BN_ASM_MONT", "-DOPENSSL_BN_ASM_MONT5"
+                                                ,"-DOPENSSL_CPUID_OBJ", "-DOPENSSL_IA32_SSE2", "-DPOLY1305_ASM", "-DSHA1_ASM", "-DSHA256_ASM", "-DSHA512_ASM", "-DVPAES_ASM"
+                                                ,"-DWHIRlPOOL_ASM", "-DX25519_ASM", lib_cflags, lib_cppflags, "-MMD", "-MF"
+                                                , dtmp, "-MT", o, "-c", "-o", o, c]
+                                       ,unwords ["touch", dtmp]
+                                       ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
+                                                ,"then", "rm", "-f", dtmp, "else", "mv", dtmp, d ++ ";", "fi"]]
         where f o = let (Just x) = g $ takeBaseName o in
                       replaceFileName o (x <.> "c")
               g bn | isPrefixOf "libcrypto-lib-" bn = stripPrefix "libcrypto-lib-" bn
                    | isPrefixOf "libcrypto-shlib-" bn = stripPrefix "libcrypto-shlib-" bn
-                   | isPrefixOf "fips-dso-" bn = stripPrefix "fips-dso-" bn
                    | otherwise = error $ "basename is " ++ show bn
 
--- crypto/aes/libcrypto-lib-aes_ecb.o
--- crypto/aes/libcrypto-lib-aes_ige.o
+
+  let build_fips_dso ef o =
+        let c = f o
+            dtmp = o -<.> "d.tmp"
+            d = o -<.> "d" in   
+          seqCmds [unwords [cc, ef, "-I.", "-Icrypto/include", "-Iinclude"
+                           , "-Iproviders/common/include", "-Iproviders/common/ciphers", "-Icrypto"
+                           ,"-Iproviders/common/macs", "-Iproviders/common/kdfs"
+                           , "-DAES_ASM","-DBSAES_ASM", "-DECP_NISTZ256_ASM", "-DFIPS_MODE"
+                           ,"-DGHASH_ASM","-DKECCAK1600_ASM","-DOPENSSL_BN_ASM_GF2m"
+                           ,"-DOPENSSL_BN_ASM_MONT","-DOPENSSL_BN_ASM_MONT5","-DOPENSSL_CPUID_OBJ"
+                           ,"-DOPENSSL_IA32_SSE2","-DSHA1_ASM", "-DSHA256_ASM", "-DSHA512_ASM"
+                           ,"-DVPAES_ASM","-DX25519_ASM", dso_cflags, dso_cppflags, "-MMD", "-MF"
+                           , dtmp, "-MT", o, "-c", "-o", o, c]
+                  ,unwords ["touch", dtmp]
+                  ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
+                           ,"then", "rm", "-f", dtmp, "else", "mv", dtmp, d ++ ";", "fi"]]
+        where f o = let (Just x) = g $ takeBaseName o in
+                      replaceFileName o (x <.> "c")
+              g bn | isPrefixOf "fips-dso-" bn = stripPrefix "fips-dso-" bn
+                   | otherwise = error $ "basename is " ++ show bn
+
 
   -- crypto/buildinf.h: util/mkbuildinf.pl configdata.pm
   shcCmd $ unwords [perl, "util/mkbuildinf.pl", "\"" ++ cc, lib_cflags, cppflags_q ++ "\"", "\"" ++ platform ++ "\"", ">", "crypto/buildinf.h"]
   
-  (build_crypto_aes "") "crypto/libcrypto-lib-cversion.o"
-  
-  forM_ (libcrypto_c_objs ++ libcryptoso3_c_objs) (build_crypto_aes "")
-  forM_ libcrypto_c_2_objs (build_crypto_aes "-Icrypto/ec/curve448/arch_32 -Icrypto/ec/curve448")
-  
+  forM_ (libcrypto_c_objs ++ libcryptoso3_c_objs) (build_libcrypto "") -- -DOPENSSL_IA32_SSE2
+  forM_ libcrypto_c_2_objs (build_libcrypto "-Icrypto/ec/curve448/arch_32 -Icrypto/ec/curve448")
+
+  forM_ fips_dso_objs (build_fips_dso "")
+  forM_ ["crypto/ec/curve448/arch_32/fips-dso-f_impl.o",
+         "crypto/ec/curve448/fips-dso-curve448.o",
+         "crypto/ec/curve448/fips-dso-curve448_tables.o",
+         "crypto/ec/curve448/fips-dso-eddsa.o",
+         "crypto/ec/curve448/fips-dso-f_generic.o",
+         "crypto/ec/curve448/fips-dso-scalar.o"]
+    (build_fips_dso "-Icrypto/ec/curve448/arch_32 -Icrypto/ec/curve448")
 
   -- libssl_objs
   let build_libssl_obj o = let c = f o
@@ -169,17 +198,24 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
   seqCmds [unwords [ar, arflags, "test/libtestutil.a", unwords libtestutil_objs] -- ditto
           ,unwords [ranlib, "test/libtestutil.a", "|| echo Never mind."]]
 
+  -- build libcrypto.ld
+  shcCmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--version", version, "--ordinals", "util/libcrypto.num", "--name", "libcrypto", "--OS", "linux", ">", "libcrypto.ld"]
+
   --libcrypto.so.3: depends on 1 million object files
   cmd $ unwords [cc, lib_cflags, "-L.", lib_ldflags, "-Wl,-soname=libcrypto.so.3", "-o"
-                ,"libcrypto.so.3", "-Wl,--version-script-libcrypto.ld", unwords libcryptoso3_objs
+                ,"libcrypto.so.3", "-Wl,--version-script=libcrypto.ld", unwords libcryptoso3_objs
                 ,lib_ex_libs]
   
   -- libcrypto.so: libcrypto.so.3
   shcCmd $ unwords ["rm", "-f", "libcrypto.so", "&&", "ln", "-s", "libcrypto.so.3", "libcrypto.so"]
 
+
+  -- build libssl.ld
+  shcCmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--version", version, "--ordinals", "util/libssl.num", "--name", "libssl", "--OS", "linux", ">", "libssl.ld"]
+  
   -- libssl.so.3: depends on a more reasonable list of object files
   cmd $ unwords [cc, lib_cflags, "-L.", lib_ldflags, "-Wl,-soname=libssl.so.3", "-o"
-                ,"libssl.so.3", "-Wl,--version-script-libssl.ld", unwords libsslso_objs
+                ,"libssl.so.3", "-Wl,--version-script=libssl.ld", unwords libsslso_objs
                 ,"-lcrypto", lib_ex_libs]
 
   --libssl.so: libssl.so.3
@@ -230,7 +266,7 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
                    ,"echo 'Requires: libssl libcrypto' ) > openssl.pc"]
   
   -- build_modules_nodep: modules
-  let modules = ["engines/afalg.so", "engines/capi.so", "engines/dasync.so", "engines/ossltest.so"
+  let modules = ["engines/capi.so", "engines/dasync.so", "engines/ossltest.so"
                 ,"engines/padlock.so", "providers/fips.so", "providers/legacy.so", "test/p_test.so"]
   let build_engines f c = do
         let dtmp = f -<.> "d.tmp"
@@ -242,19 +278,11 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
                 "then rm -f " ++ dtmp ++ "; " ++
                 "else mv " ++ dtmp ++ " " ++ d ++ "; fi"]
   let g f = let (Just x) = stripExtension "ld" f in
-              cmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--ordinals", "util/engines.num"
+              shcCmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--ordinals", "util/engines.num"
                             ,"--name", x, "--OS", "linux", ">", f]
 
   let h f o = let ldf = f -<.> "ld" in
-                cmd $ unwords [cc, dso_cflags, "-L.", dso_ldflags, "-o", f, "-Wl"
-                              ,"--version-script=" ++ ldf, o, "-lcrypto", dso_ex_libs]
-
-  -- engines/afalg.so: engines/afalg-dso-e_afalg.o engines/afalg.ld (libcrypto.so done)
-  -- engines/afalg-dso-e_afalg.o
-  build_engines "engines/afalg-dso-e_afalg.o" "engines/e_afalg.c"
-  -- engines/afalg.ld: util/engines.num srcdir/util/mkdef.pl
-  g "engines/afalg.ld"
-  h "engines/afalg.so" "engines/afalg-dso-e_afalg.o"
+                cmd $ unwords [cc, dso_cflags, "-L.", dso_ldflags, "-o", f, "-Wl,--version-script=" ++ ldf, o, "-lcrypto", dso_ex_libs]
 
   -- engines/capi.so: engines/capi-dso-e_capi.o engines/capi.ld libcrypto.so
   -- engines/capi-dso-e_capi.o
@@ -279,35 +307,50 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
   cmd $ unwords [cc, dso_cflags, dso_cppflags, "-c", "-o", "engines/padlock-dso-e_padlock-x86_64.o"
                 ,"engines/e_padlock-x86_64.s"]
 
-  cmd $ unwords [cc, "-Iinclude", "-DPADLOCK)_ASM", dso_cflags, dso_cppflags, "-MMD", "-MF"
+  cmd $ unwords [cc, "-Iinclude", "-DPADLOCK_ASM", dso_cflags, dso_cppflags, "-MMD", "-MF"
                 ,"engines/padlock-dso-e_padlock.d.tmp", "-MT", "engines/padlock-dso-e_padlock.o"
                 ,"-c", "-o", "engines/padlock-dso-e_padlock.o", "engines/e_padlock.c"]
   seqCmds ["touch engines/padlock-dso-e_padlock.d.tmp"
           ,"if cmp engines/padlock-dso-e_padlock.d.tmp engines/padlock-dso-e_padlock.d > " ++
           "/dev/null 2> /dev/null; then rm -f engines/padlock-dso-e_padlock.d.tmp; " ++
-          "else mv engines/padlock-dso-e_padlock.d.tp engines/padlock-dso-e_padlock.d; fi"]
-  g "engines/padlock.ls"
+          "else mv engines/padlock-dso-e_padlock.d.tmp engines/padlock-dso-e_padlock.d; fi"]
+  g "engines/padlock.ld"
   h "engines/padlock.so" "engines/padlock-dso-e_padlock-x86_64.o engines/padlock-dso-e_padlock.o"
  
   -- providers/fips.so: depends on 1 million object files
-  cmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--ordinals", "util/providers.num", "--name"
-                ,"providers/fips", "-OS", "linux", ">", "providers/fips.ld"]
-  cmd $ unwords [cc, dso_cflags, "-L.", dso_ldflags, "-o", "providers/fips.so", "-Wl"
-                ,"--version-script=providers/fips.ld", unwords fips_objs, dso_ex_libs]
+  shcCmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--ordinals", "util/providers.num", "--name"
+                ,"providers/fips", "--OS", "linux", ">", "providers/fips.ld"]
+    
+  cmd $ unwords [cc, dso_cflags, "-L.", dso_ldflags, "-o", "providers/fips.so", "-Wl,--version-script=providers/fips.ld", unwords fips_objs, dso_ex_libs]
+
+  let build_legacy_obj o =
+        let c = f o
+            dtmp = o -<.> "d.tmp"
+            d = o -<.> "d" in
+          seqCmds [unwords [cc, "-I.", "-Iinclude", "-Icrypto/include", "-Iproviders/common/include"
+                           ,dso_cflags, dso_cppflags, "-MMD", "-MF", dtmp, "-MT", o, "-c", "-o", o
+                           ,c]
+                  ,unwords ["touch", dtmp]
+                  ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
+                           ,"then", "rm", "-f", dtmp ++ ";", "else", "mv", dtmp, d ++ ";", "fi"]]
+        where f o = let (Just x) = g $ takeBaseName o in
+                      replaceFileName o (x <.> "c")
+              g bn | isPrefixOf "legacy-dso-" bn = stripPrefix "legacy-dso-" bn
+                   | otherwise = error $ "basename is " ++ show bn
+
+  forM_ legacy_objs build_legacy_obj
 
   -- providers/legacy.so: depends on some object files
-  cmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--ordinals", "util/providers.num"
+  shcCmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--ordinals", "util/providers.num"
                 ,"--name", "providers/legacy", "--OS", "linux", ">", "providers/legacy.ld"]
-  cmd $ unwords [cc, dso_cflags, "-L.", dso_ldflags, "-o", "providers/legacy.so", "-Wl"
-                ,"--version-script=providers/legacy.ld", unwords legacy_objs, "-lcrypto"
+  cmd $ unwords [cc, dso_cflags, "-L.", dso_ldflags, "-o", "providers/legacy.so", "-Wl,--version-script=providers/legacy.ld", unwords legacy_objs, "-lcrypto"
                 , dso_ex_libs]
 
   -- test/p_test.so
   build_engines "test/p_test-dso-p_test.o" "test/p_test.c"
-  cmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--ordinals", "util/providers.num",
+  shcCmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--ordinals", "util/providers.num",
                  "--name", "test/p_test", "--OS", "linux", ">", "test/p_test.ld"]
-  cmd $ unwords [cc, dso_cflags, "-L.", dso_ldflags, "-o", "test/p_test.so", "-Wl"
-                ,"--version-script=test/p_test.ld", "test/p_test-dso-p_test.o"
+  cmd $ unwords [cc, dso_cflags, "-L.", dso_ldflags, "-o", "test/p_test.so", "-Wl,--version-script=test/p_test.ld", "test/p_test-dso-p_test.o"
                 ,dso_ex_libs]
 
   -- build_programs_nodep: programs scripts
@@ -335,18 +378,45 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
   let build_obj2 o = let dtmp = o -<.> "d.tmp"
                          d = o -<.> "d"
                          cname = reverse $ takeWhile (\x -> x /= '-') $ reverse $ takeBaseName o
-                         c = replaceFileName o (cname <.> "c") in
+                         c = if "fuzz/corpus.c" == replaceFileName o (cname <.> "c")
+                             then "fuzz/test-corpus.c"
+                             else replaceFileName o (cname <.> "c") in
                        seqCmds [unwords [cc, "-Iinclude", bin_cflags, bin_cppflags, "-MMD", "-MF"
                                         , dtmp, "-MT",  o, "-c", "-o", o, c]
                                ,unwords ["touch", dtmp]
                                ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
                                         ,"then", "rm", "-f", dtmp ++ ";", "else", "mv", dtmp
                                         , d ++ ";", "fi"]]
+
+  let build_obj3 iflags o = let dtmp = o -<.> "d.tmp"
+                                d = o -<.> "d"
+                                cname = reverse $ takeWhile (\x -> x /= '-') $ reverse $ takeBaseName o
+                                c = replaceFileName o (cname <.> "c") in
+                              seqCmds [unwords [cc, iflags, bin_cflags, bin_cppflags, "-MMD", "-MF"
+                                               , dtmp, "-MT",  o, "-c", "-o", o, c]
+                                      ,unwords ["touch", dtmp]
+                                      ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
+                                               ,"then", "rm", "-f", dtmp ++ ";", "else", "mv", dtmp
+                                               , d ++ ";", "fi"]]
+  
+
   forM_ apps_openssl_objs build_obj
 
 
   forM_ fuzz_objs build_obj2
-  
+
+
+  -- -Iinclude -Iinclude/apps -I.
+
+  forM_ test_c (\c -> let (Just arg) = stripPrefix "buildtest_" $ takeBaseName c in
+                        shcCmd $ unwords [perl, "test/generate_buildtest.pl", arg, ">", c])
+
+
+  forM_ test_objs_1 (build_obj3 "-I. -Iinclude -Iapps/include")
+  forM_ test_objs_2 (build_obj3 "-Iinclude -Iapps/include")
+  forM_ test_objs_3 (build_obj3 "-Iinclude")
+  build_obj3 "-I. -Iinclude -Icrypto/include -Icrypto/bin -Iapps/include" "test/bn_internal_test-bin-bn_internal_test.o"
+  forM_ test_objs_4 (build_obj3 "-I. -Iinclude -Iapps/include -Icrypto/include")
   --forM_ fuzz_asn1_test_objs build_obj2
   --forM_ fuzz_asn1parse_test_objs build_obj2
   
@@ -354,15 +424,15 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
   let build_program (p,os) =
         seqCmds ["rm -f " ++ p
                 ,unwords ["${" ++ "LDCMD" ++ ":-" ++ cc ++ "}", bin_cflags, "-L." ,bin_ldflags
-                         ,"-o", unwords os, "-lssl", "-lcrypto", bin_ex_libs]]
+                         ,"-o", p, unwords os, "-lssl", "-lcrypto", bin_ex_libs]]
   let build_program2 (p,os) =
         seqCmds ["rm -f " ++ p
                 ,unwords ["${" ++ "LDCMD" ++ ":-" ++ cc ++ "}", bin_cflags, "-L." ,bin_ldflags
-                         ,"-o", unwords os, "-lcrypto", bin_ex_libs]]
+                         ,"-o", p, unwords os, "-lcrypto", bin_ex_libs]]
   let build_program3 (p,os) =
         seqCmds ["rm -f " ++ p
                 ,unwords ["${" ++ "LDCMD" ++ ":-" ++ cc ++ "}", bin_cflags, "-L.", bin_ldflags
-                         ,"-o", unwords os, "-lssl", "test/libtestutil.a", "-lcrypto", bin_ex_libs]]
+                         ,"-o", p, unwords os, "-lssl", "test/libtestutil.a", "-lcrypto", bin_ex_libs]]
 
 -- -Icrypto/ec/curve448/arch_32 -Icrypto/ec/curve448
 
