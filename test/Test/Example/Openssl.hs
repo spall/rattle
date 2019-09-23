@@ -15,7 +15,6 @@ import qualified Data.HashSet as Set
 
 main :: IO ()
 main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
-
   let generated_mandatory = ["crypto/include/internal/bn_conf.h" --
                             ,"crypto/include/internal/dso_conf.h"
                             ,"doc/man7/openssl_user_macros.pod", "include/openssl/opensslconf.h"
@@ -399,6 +398,17 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
                                       ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
                                                ,"then", "rm", "-f", dtmp ++ ";", "else", "mv", dtmp
                                                , d ++ ";", "fi"]]
+
+  let build_obj_lib iflags o = let dtmp = o -<.> "d.tmp"
+                                   d = o -<.> "d"
+                                   cname = reverse $ takeWhile (\x -> x /= '-') $ reverse $ takeBaseName o
+                                   c = replaceFileName o (cname <.> "c") in
+                                 seqCmds [unwords [cc, iflags, lib_cflags, lib_cppflags, "-MMD", "-MF"
+                                                  , dtmp, "-MT",  o, "-c", "-o", o, c]
+                                         ,unwords ["touch", dtmp]
+                                         ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
+                                                  ,"then", "rm", "-f", dtmp ++ ";", "else", "mv", dtmp
+                                                  , d ++ ";", "fi"]]
   
 
   forM_ apps_openssl_objs build_obj
@@ -420,6 +430,12 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
   forM_ test_objs_5 (build_obj3 "-I. -Iinclude -Iapps/include -Icrypto/ec/curve448")
   forM_ test_objs_4 (build_obj3 "-I. -Iinclude -Iapps/include -Icrypto/include")
   forM_ test_objs_6 (build_obj3 "-Iinclude -Iapps/include -Itest -I. -Icrypto/include")
+  forM_ test_objs_7 (build_obj3 "-Iinclude -Iapps/include -Icrypto/include")
+  forM_ test_objs_9 (build_obj3 "-I. -Iinclude -Icrypto/include -Icrypto/rsa -Iapps/include")
+  forM_ test_objs_10 (build_obj3 "-Iinclude -Iapps/include  -DPROVIDER_INIT_FUNCTION_NAME=p_test_init")
+  forM_ test_objs_11 (build_obj3 "-Iinclude -Icrypto/ec -Iapps/include -Icrypto/include")
+
+  forM_ test_objs_8 (build_obj_lib "-Iinclude -Iapps/include -I.")
 
   --forM_ fuzz_asn1_test_objs build_obj2
   --forM_ fuzz_asn1parse_test_objs build_obj2
