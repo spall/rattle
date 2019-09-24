@@ -264,7 +264,8 @@ test_objs_10 = ["test/provider_internal_test-bin-p_test.o", "test/provider_test-
                ,"test/provider_test-bin-p_test.o", "test/provider_internal_test-bin-provider_internal_test.o"]
 
 test_objs_11 = ["test/ec_internal_test-bin-ec_internal_test.o"]
-  
+
+test_evp_fetch_prov_test_objs = ["test/evp_fetch_prov_test-bin-evp_fetch_prov_test.o", "test/libtestutil.a"]
 test_aborttest_objs = ["test/aborttest-bin-aborttest.o"] 
 test_aesgcmtest_objs = ["test/aesgcmtest-bin-aesgcmtest.o", "test/libtestutil.a"] -- -I. 
 test_afalgtest_objs = ["test/afalgtest-bin-afalgtest.o", "test/libtestutil.a"] 
@@ -495,7 +496,7 @@ programs = [("apps/openssl", apps_openssl_objs ++ ["apps/libapps.a"]), ("fuzz/as
 programs2 =
   [ ("fuzz/asn1parse-test", fuzz_asn1parse_test_objs), ("fuzz/bignum-test", fuzz_bignum_test_objs)
   ,("fuzz/bndiv-test", fuzz_bndiv_test_objs),  ("fuzz/cms-test", fuzz_cms_test_objs), ("fuzz/conf-test", fuzz_conf_test_objs)
-  ,("fuzz/crl-test", fuzz_crl_test_objs), ("fuzz/ct-test", fuzz_ct_test_objs),  ("fuzz/x509-test", fuzz_x509_test_objs), ("test/aborttest", test_aborttest_objs)
+  ,("fuzz/crl-test", fuzz_crl_test_objs), ("fuzz/ct-test", fuzz_ct_test_objs),  ("fuzz/x509-test", fuzz_x509_test_objs), ("test/aborttest", test_aborttest_objs), ("test/evp_fetch_prov_test", test_evp_fetch_prov_test_objs)
   ,("test/aesgcmtest", test_aesgcmtest_objs), ("test/afalgtest", test_afalgtest_objs), ("test/asn1_decode_test", test_asn1_decode_test_objs)
   ,("test/asn1_dsa_internal_test", test_asn1_dsa_internal_test_objs), ("test/asn1_encode_test", test_asn1_encode_test_objs), ("test/asn1_internal_test", test_asn1_internal_test_objs)
   ,("test/asn1_string_table_test", test_asn1_string_table_test_objs), ("test/asn1_time_test", test_asn1_time_test_objs) 

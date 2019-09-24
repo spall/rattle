@@ -47,15 +47,15 @@ main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
                  "; else mv " ++ dtmp ++ " " ++ d ++ "; fi"]
 
   let libapps = [("apps/lib/libapps-lib-app_params.o", "apps/lib/app_params.c")
-                ,("apps/libapps-lib-app_rand.o", "apps/lib/app_rand.c")
-                ,("apps/libapps-lib-apps.o", "apps/lib/apps.c")
-                ,("apps/libapps-lib-apps_ui.o", "apps/lib/apps_ui.c")
-                ,("apps/libapps-lib-bf_prefix.o", "apps/lib/bf_prefix.c")
-                ,("apps/libapps-lib-columns.o", "apps/lib/columns.c")
-                ,("apps/libapps-lib-fmt.o", "apps/lib/fmt.c")
-                ,("apps/libapps-lib-opt.o", "apps/lib/opt.c")
-                ,("apps/libapps-lib-s_cb.o", "apps/lib/s_cb.c")
-                ,("apps/libapps-lib-s_socket.o", "apps/lib/s_socket.c")]
+                ,("apps/lib/libapps-lib-app_rand.o", "apps/lib/app_rand.c")
+                ,("apps/lib/libapps-lib-apps.o", "apps/lib/apps.c")
+                ,("apps/lib/libapps-lib-apps_ui.o", "apps/lib/apps_ui.c")
+                ,("apps/lib/libapps-lib-bf_prefix.o", "apps/lib/bf_prefix.c")
+                ,("apps/lib/libapps-lib-columns.o", "apps/lib/columns.c")
+                ,("apps/lib/libapps-lib-fmt.o", "apps/lib/fmt.c")
+                ,("apps/lib/libapps-lib-opt.o", "apps/lib/opt.c")
+                ,("apps/lib/libapps-lib-s_cb.o", "apps/lib/s_cb.c")
+                ,("apps/lib/libapps-lib-s_socket.o", "apps/lib/s_socket.c")]
 
   
   shcCmd $ unwords [perl, "crypto/bn/bn_prime.pl", ">", "crypto/bn/bn_prime.h"]
