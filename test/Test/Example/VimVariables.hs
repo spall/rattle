@@ -9,13 +9,11 @@ module Test.Example.VimVariables
    cc, srcdir, all_lib_dirs, vimtarget, ldflags, all_libs, nl,
    compiledby, term_obj, cccterm, xdiff_objs, cccdiff, obj_minus,
    purify, shrpenv, cclink, link_as_needed, cflags, pofiles, podir,
-   destdir, prefix, msgfmt, obj, gui_inc_loc, glib_compile_resources
+   destdir, prefix, msgfmt, obj, gui_inc_loc
 ) where
 
 
-glib_compile_resources = "/usr/bin/glib-compile-resources"
-gui_inc_loc = "-pthread -I/usr/include/gtk-2.0 -I/usr/lib64/gtk-2.0/include -I/usr/include/atk-1.0 -I/usr/include/cairo -I/usr/include/gdk-pixbuf-2.0 -I/usr/include/pango-1.0 -I/usr/include/fribidi -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include -I/usr/include/harfbuzz -I/usr/include/freetype2 -I/usr/include/libpng15 -I/usr/include/uuid -I/usr/include/pixman-1 -I/usr/include/libdrm"
-
+gui_inc_loc = ""
 prefix = "error"
 destdir = "~/pkg/vim"
 exeext = ""
@@ -34,7 +32,7 @@ ccc =  unwords [ccc_nf, all_cflags]
 cccterm = unwords [ccc_nf, vterm_cflags, all_cflags, "-DINLINE=\"\"", "-DVSNPRINTF=vim_vsnprintf",
                    "-DIS_COMBINING_FUNCTION=utf_iscomposing_uint", "-DWCWIDTH_FUNCTION=utf_uint2cells"]
 cccdiff = unwords [ccc_nf, all_cflags]
-cflags = "-O2 -fno-strength-reduce -Wall -D_REENTRANT -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1"
+cflags = "-g -O2 -D_REENTRANT -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1"
 srcdir = "."
 vimname = "vim"
 cclink = cc
@@ -60,14 +58,14 @@ xdiff_objs = ["objects/xdiffi.o", "objects/xemit.o", "objects/xprepare.o"
 -- I got this from config.mk after running configure on my machine
 
 -- need to change "-I /<path>" to "-isystem /<path>" for GCC 3.x.
-cpp = "gcc -E" -- got from config.mk 
+cpp = "gcc -std=gnu99 -E" -- got from config.mk 
 
 shell = "/bin/sh"
 mkdir_p = unwords [shell, "install-sh", "-c", "-d"]
 
 defs = "-DHAVE_CONFIG_H" -- config.mk
 vterm_cflags = "-Ilibvterm/include"
-gui_defs = gtk_defs
+gui_defs = "" -- gtk_defs
 narrow_proto = ""
 gtk_defs = "-DFEAT_GUI_GTK " ++ narrow_proto 
 gtk_ipath = gui_inc_loc
@@ -104,7 +102,7 @@ depend_cflags = unwords ["-DPROTO", "-DDEPEND", "-DFEAT_GUI", lint_cflags]
 -- # needed by racket.
 gui_libs_dir = ""
 gtk_libs1 = ""
-gtk_libname = "-lgtk-x11-2.0 -lgdk-x11-2.0 -latk-1.0 -lgio-2.0 -lpangoft2-1.0 -lpangocairo-1.0 -lgdk_pixbuf-2.0 -lcairo -lpango-1.0 -lfontconfig -lgobject-2.0 -lglib-2.0 -lfreetype"
+gtk_libname = ""
 gtk_libs2 = gtk_libname
 gui_libs1 = gtk_libs1
 gui_libs2 = gtk_libs2
@@ -116,7 +114,7 @@ x_pre_libs = "-lSM -lICE -lXpm" -- from config.mk
 x_libs = "-lXt -lX11" -- ditto
 x_extra_libs = "-lXdmcp -lSM -lICE"
 mzscheme_libs = ""
-libs = "-lm -ltinfo -lelf -lnsl -lselinux -lcanberra -lacl -lattr -lgpm" -- -ldl"
+libs = "-lm -ltinfo -lelf -lnsl -lselinux -lcanberra -lacl -lattr -lgpm -ldl"
 extra_libs = ""
 lua_libs = ""
 perl_libs = ""
@@ -128,14 +126,14 @@ profile_libs = ""
 sanitizer_libs = sanitizer_cflags
 leak_libs = ""
 all_libs = [gui_libs1, gui_x_libs, gui_libs2, x_pre_libs, x_libs, x_extra_libs
-           ,mzscheme_libs, libs] {-, libs, extra_libs, lua_libs, perl_libs, python_libs
+           ,mzscheme_libs, libs, extra_libs, lua_libs, perl_libs, python_libs
            ,python3_libs, tcl_libs, ruby_libs, profile_libs, sanitizer_libs
-           ,leak_libs] -}
+           ,leak_libs]
 
 -- todo:  move objects/mouse.o to obj_common
 
 hangulin_obj = ""
-gui_obj = gtk_obj 
+gui_obj = [] 
 term_obj = ["objects/encoding.o", "objects/keyboard.o", "objects/termmouse.o", "objects/parser.o", "objects/pen.o", "objects/termscreen.o", "objects/state.o", "objects/unicode.o", "objects/vterm.o"]
 lua_obj = ""
 mzscheme_obj = ""

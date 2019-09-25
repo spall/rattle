@@ -68,7 +68,7 @@ testGitVim :: String -> Run () -> IO ()
 testGitVim url run = do
   b <- doesDirectoryExist ".git"
   if b then cmd "git fetch" else cmd_ "git clone" url "."
-  cmd_ ["make", "config"]
-  forM_ [0] $ \i -> do
+  cmd_ ["./configure","--enable-gui=no"]
+  forM_ [10,9..0] $ \i -> do
     cmd_ "git reset --hard" ["origin/master~" ++ show i]
     rattleRun rattleOptions run

@@ -68,14 +68,6 @@ main = testGitVim "https://github.com/vim/vim" $ do
 
     cmd $ unwords [ccc, "-o", "objects/pathdef.o", "auto/pathdef.c"]
     -- build term_deps
-
-    -- auto/gui_gtk_gresources.c
-    cmd $ unwords [glib_compile_resources, "--target=auto/gui_gtk_gresources.c", "--sourcedir=../pixmaps", "--generate", "--c-name=gui_gtk", "--manual-register", "gui_gtk_res.xml"]
-
-    -- auto/gui_gtk_gresources.h
-    shcCmd $ unwords ["if", "test", "-z", "\"" ++ glib_compile_resources ++ "\";", "then", "touch", "auto/gui_gtk_gresources.h" ++ ";"
-                     ,"else", glib_compile_resources, "--target=auto/gui_gtk_gresources.h", "--sourcedir=../pixmaps", "--generate"
-                     ,"--c-name=gui_gtk", "--manual-register", "gui_gtk_res.xml;", "fi"]
     
     forM_ term_obj (\o -> shcCmd $ unwords [cccterm, "-o", o, "libvterm/src" </> (takeBaseName o <.> ".c")])
     forM_ xdiff_objs (\o -> shcCmd $ unwords [cccdiff, "-o", o, "xdiff" </> (takeBaseName o <.> ".c")])
@@ -94,7 +86,6 @@ main = testGitVim "https://github.com/vim/vim" $ do
                      , vimtarget, unwords obj, unwords all_libs ++ "\""
                      , "LINK_AS_NEEDED=" ++ link_as_needed, "sh", srcdir ++ "/link.sh"]
     -}
-    error "die"
     -- TOOLS = xxd/xxdEXEEXT
     -- depends on xxd/xxd.c
     withCmdOptions [Cwd "xxd"] $ do
