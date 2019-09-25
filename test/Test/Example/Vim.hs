@@ -22,7 +22,6 @@ main = testGitVim "https://github.com/vim/vim" $ do
     let quotesed = "sed -e 's/[\\\\\"]/\\\\&/g' -e 's/\\\\\"/\"/' -e 's/\\\\\";$$/\";/'"
     --QUOTESED        = sed -e 's/[\\"]/\\&/g' -e 's/\\"/"/' -e 's/\\";$$/";/'
 
-    let glib_compile_resources = "" -- this seems wrong
     -- there is an individual target for each object file in the makefile?
     -- need to build auto/gui_gtk_gresources.c and .h
         --cmd [glib_compile_resources, "--target=auto/gui_gtk_gresources.c", "--sourcedir=../pixmaps", "--generate", "--c-name=gui_gtk", "--manual-register", "gui_gtk_res.xml"]
@@ -69,18 +68,33 @@ main = testGitVim "https://github.com/vim/vim" $ do
 
     cmd $ unwords [ccc, "-o", "objects/pathdef.o", "auto/pathdef.c"]
     -- build term_deps
+
+    -- auto/gui_gtk_gresources.c
+    cmd $ unwords [glib_compile_resources, "--target=auto/gui_gtk_gresources.c", "--sourcedir=../pixmaps", "--generate", "--c-name=gui_gtk", "--manual-register", "gui_gtk_res.xml"]
+
+    -- auto/gui_gtk_gresources.h
+    shcCmd $ unwords ["if", "test", "-z", "\"" ++ glib_compile_resources ++ "\";", "then", "touch", "auto/gui_gtk_gresources.h" ++ ";"
+                     ,"else", glib_compile_resources, "--target=auto/gui_gtk_gresources.h", "--sourcedir=../pixmaps", "--generate"
+                     ,"--c-name=gui_gtk", "--manual-register", "gui_gtk_res.xml;", "fi"]
     
     forM_ term_obj (\o -> shcCmd $ unwords [cccterm, "-o", o, "libvterm/src" </> (takeBaseName o <.> ".c")])
     forM_ xdiff_objs (\o -> shcCmd $ unwords [cccdiff, "-o", o, "xdiff" </> (takeBaseName o <.> ".c")])
     
     forM_ obj_minus (\o -> if o == "" then return ()
-                           else cmd $ unwords [ccc, "-o", o, takeBaseName o <.> ".c"])
+                           else let c = if o == "objects/gui_gtk_gresources.o"
+                                        then "auto/gui_gtk_gresources.c"
+                                        else takeBaseName o <.> ".c" in
+                             cmd $ unwords [ccc, "-o", o, c])
     -- doesn't work for them all
   
     -- TODO check next cmd. not sure its correct
-    shcCmd $ unwords ["LINK=\"" ++ purify, shrpenv, cclink, unwords all_lib_dirs, ldflags, "-o"
+    cmd $ unwords [cclink, unwords all_lib_dirs, ldflags, "-o", vimtarget, unwords obj, unwords all_libs]
+    {-
+    shcCmd $ unwords ["LINK=\"" ++ cclink, unwords all_lib_dirs, ldflags, "-o" -- purify shrpenv
                      , vimtarget, unwords obj, unwords all_libs ++ "\""
                      , "LINK_AS_NEEDED=" ++ link_as_needed, "sh", srcdir ++ "/link.sh"]
+    -}
+    error "die"
     -- TOOLS = xxd/xxdEXEEXT
     -- depends on xxd/xxd.c
     withCmdOptions [Cwd "xxd"] $ do
