@@ -13,8 +13,11 @@ import Control.Monad
 import Data.List
 import qualified Data.HashSet as Set
 
+commits = ["4e8b8e4", "d3386f7", "6061cd5", "ec87a64", "a6105ef"
+          ,"387bbce", "a941054", "e3f3ee4", "15dbf3a", "7757a90"] --, "38cfb11","69db304", "9bd9c44", "8d1502d", "b3681e2", "2281be2"]
+
 main :: IO ()
-main = testGitConfig "https://github.com/openssl/openssl" (cmd_ "./config") $ do
+main = testGitConfigRattle "https://github.com/openssl/openssl" commits (cmd_ "./config") $ do
   let generated_mandatory = ["crypto/include/internal/bn_conf.h" --
                             ,"crypto/include/internal/dso_conf.h"
                             ,"doc/man7/openssl_user_macros.pod", "include/openssl/opensslconf.h"
