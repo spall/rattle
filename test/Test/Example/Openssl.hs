@@ -11,13 +11,15 @@ import Development.Shake.FilePath
 import Development.Shake.Command
 import Control.Monad
 import Data.List
+import System.Directory
 import qualified Data.HashSet as Set
 
-commits = ["4e8b8e4", "d3386f7", "6061cd5", "ec87a64", "a6105ef"
-          ,"387bbce", "a941054", "e3f3ee4", "15dbf3a", "7757a90"] --, "38cfb11","69db304", "9bd9c44", "8d1502d", "b3681e2", "2281be2"]
+-- if their c files exist then build them and link them with libcrytoso3 otherwise don't.
+libcryptoso3_extra = ["providers/default/ciphers/libcrypto-shlib-cipher_des.o","providers/default/ciphers/libcrypto-shlib-cipher_des_hw.o"
+                     ,"providers/default/ciphers/libcrypto-shlib-cipher_rc4.o","providers/default/ciphers/libcrypto-shlib-cipher_rc4_hw.o"]
 
 main :: IO ()
-main = testGitConfigRattle "https://github.com/openssl/openssl" commits (cmd_ "./config") $ do
+main = rattleRun rattleOptions $ do
   let generated_mandatory = ["crypto/include/internal/bn_conf.h" --
                             ,"crypto/include/internal/dso_conf.h"
                             ,"doc/man7/openssl_user_macros.pod", "include/openssl/opensslconf.h"
@@ -92,21 +94,25 @@ main = testGitConfigRattle "https://github.com/openssl/openssl" commits (cmd_ ".
 
 
 -- crypto/aes/libcrypto-lib-aes_cfb.o
-  let build_libcrypto ef o = let c = f o
-                                 dtmp = o -<.> "d.tmp"
-                                 d = o -<.> "d" in   
-                               seqCmds [unwords [cc, ef, "-I.", "-Icrypto/include", "-Iinclude", "-Iproviders/common/include"
-                                                ,"-Iproviders/default/include", "-Iproviders/common/ciphers", "-Icrypto"
-                                                ,"-Iproviders/common/macs", "-Iproviders/common/kdfs", "-Iproviders/default/macs"
-                                                ,"-Iproviders/default/ciphers", "-Iproviders/default/kdfs", "-DAES_ASM"
-                                                ,"-DBSAES_ASM", "-DECP_NISTZ256_ASM", "-DGHASH_ASM", "-DKECCAK1600_ASM", "-DMD5_ASM"
-                                                ,"-DOPENSSL_BN_ASM_GF2m", "-DOPENSSL_BN_ASM_MONT", "-DOPENSSL_BN_ASM_MONT5"
-                                                ,"-DOPENSSL_CPUID_OBJ", "-DOPENSSL_IA32_SSE2", "-DPOLY1305_ASM", "-DSHA1_ASM", "-DSHA256_ASM", "-DSHA512_ASM", "-DVPAES_ASM"
-                                                ,"-DWHIRlPOOL_ASM", "-DX25519_ASM", lib_cflags, lib_cppflags, "-MMD", "-MF"
-                                                , dtmp, "-MT", o, "-c", "-o", o, c]
-                                       ,unwords ["touch", dtmp]
-                                       ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
-                                                ,"then", "rm", "-f", dtmp, "else", "mv", dtmp, d ++ ";", "fi"]]
+  let build_libcrypto ef o = do
+        let c = f o
+        let dtmp = o -<.> "d.tmp"
+        let d = o -<.> "d"
+        b <- liftIO $ doesFileExist c
+        if b
+          then seqCmds [unwords [cc, ef, "-I.", "-Icrypto/include", "-Iinclude", "-Iproviders/common/include"
+                                ,"-Iproviders/default/include", "-Iproviders/common/ciphers", "-Icrypto"
+                                ,"-Iproviders/common/macs", "-Iproviders/common/kdfs", "-Iproviders/default/macs"
+                                ,"-Iproviders/default/ciphers", "-Iproviders/default/kdfs", "-DAES_ASM"
+                                ,"-DBSAES_ASM", "-DECP_NISTZ256_ASM", "-DGHASH_ASM", "-DKECCAK1600_ASM", "-DMD5_ASM"
+                                ,"-DOPENSSL_BN_ASM_GF2m", "-DOPENSSL_BN_ASM_MONT", "-DOPENSSL_BN_ASM_MONT5"
+                                ,"-DOPENSSL_CPUID_OBJ", "-DOPENSSL_IA32_SSE2", "-DPOLY1305_ASM", "-DSHA1_ASM", "-DSHA256_ASM", "-DSHA512_ASM", "-DVPAES_ASM"
+                                ,"-DWHIRlPOOL_ASM", "-DX25519_ASM", lib_cflags, lib_cppflags, "-MMD", "-MF"
+                                , dtmp, "-MT", o, "-c", "-o", o, c]
+                       ,unwords ["touch", dtmp]
+                       ,unwords ["if", "cmp", dtmp, d, ">", "/dev/null", "2>", "/dev/null;"
+                                ,"then", "rm", "-f", dtmp, "else", "mv", dtmp, d ++ ";", "fi"]]
+          else liftIO (putStrLn $ "Not building " ++ o)
         where f o = let (Just x) = g $ takeBaseName o in
                       replaceFileName o (x <.> "c")
               g bn | isPrefixOf "libcrypto-lib-" bn = stripPrefix "libcrypto-lib-" bn
@@ -117,7 +123,7 @@ main = testGitConfigRattle "https://github.com/openssl/openssl" commits (cmd_ ".
   let build_fips_dso ef o =
         let c = f o
             dtmp = o -<.> "d.tmp"
-            d = o -<.> "d" in   
+            d = o -<.> "d" in
           seqCmds [unwords [cc, ef, "-I.", "-Icrypto/include", "-Iinclude"
                            , "-Iproviders/common/include", "-Iproviders/common/ciphers", "-Icrypto"
                            ,"-Iproviders/common/macs", "-Iproviders/common/kdfs"
@@ -139,7 +145,9 @@ main = testGitConfigRattle "https://github.com/openssl/openssl" commits (cmd_ ".
   -- crypto/buildinf.h: util/mkbuildinf.pl configdata.pm
   shcCmd $ unwords [perl, "util/mkbuildinf.pl", "\"" ++ cc, lib_cflags, cppflags_q ++ "\"", "\"" ++ platform ++ "\"", ">", "crypto/buildinf.h"]
   
-  forM_ (libcrypto_c_objs ++ libcryptoso3_c_objs) (build_libcrypto "") -- -DOPENSSL_IA32_SSE2
+  forM_ (libcrypto_c_objs ++ libcryptoso3_c_objs ++ libcryptoso3_extra) (build_libcrypto "") -- -DOPENSSL_IA32_SSE2
+  
+  
   forM_ libcrypto_c_2_objs (build_libcrypto "-Icrypto/ec/curve448/arch_32 -Icrypto/ec/curve448")
 
   forM_ fips_dso_objs (build_fips_dso "")
@@ -189,8 +197,17 @@ main = testGitConfigRattle "https://github.com/openssl/openssl" commits (cmd_ ".
   forM_ libsslso_objs build_libssl_obj
 
   
+  b <- liftIO $ doesFileExist "providers/default/ciphers/libcrypto-shlib-cipher_des.o"
+  b2 <- liftIO $ doesFileExist "providers/default/ciphers/libcrypto-shlib-cipher_des_hw.o"
+
+  exist_extra <- liftIO $ foldM (\ls o -> do
+                                    b <- doesFileExist o
+                                    if b then return $ o:ls
+                                      else return ls)
+                 [] libcryptoso3_extra
+  
   -- libcrypto.a": depends on 1 million object files
-  seqCmds [unwords [ar, arflags, "libcrypto.a", unwords libcrypto_objs] -- ditto about changed ons
+  seqCmds [unwords [ar, arflags, "libcrypto.a", unwords (libcrypto_objs ++ exist_extra)] -- ditto about changed ons
           ,unwords [ranlib, "libcrypto.a", "|| echo Never mind."]]
 
   -- libssl.a"
@@ -205,8 +222,11 @@ main = testGitConfigRattle "https://github.com/openssl/openssl" commits (cmd_ ".
   shcCmd $ unwords [perl, srcdir </> "util/mkdef.pl", "--version", version, "--ordinals", "util/libcrypto.num", "--name", "libcrypto", "--OS", "linux", ">", "libcrypto.ld"]
 
   --libcrypto.so.3: depends on 1 million object files
+  
+  let exist_libcryptoso3_objs = libcryptoso3_objs ++ exist_extra
+  
   cmd $ unwords [cc, lib_cflags, "-L.", lib_ldflags, "-Wl,-soname=libcrypto.so.3", "-o"
-                ,"libcrypto.so.3", "-Wl,--version-script=libcrypto.ld", unwords libcryptoso3_objs
+                ,"libcrypto.so.3", "-Wl,--version-script=libcrypto.ld", unwords exist_libcryptoso3_objs
                 ,lib_ex_libs]
   
   -- libcrypto.so: libcrypto.so.3
