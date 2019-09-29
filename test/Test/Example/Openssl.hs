@@ -1,11 +1,10 @@
 
-module Test.Example.Openssl(main) where
+module Openssl(main) where
 
 import Development.Rattle
 import Test.Example.OpensslVariables
 import Test.Example.LibCryptoObjs
 import Test.Example.LibCryptoso3Objs
-import Test.Type
 import Test.Example.CmdHelpers
 import Development.Shake.FilePath
 import Development.Shake.Command

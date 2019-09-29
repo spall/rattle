@@ -14,7 +14,6 @@ import Development.Rattle
 
 import qualified Test.Example.FSATrace
 import qualified Test.Example.Stack
-import qualified Test.Example.Openssl
 import qualified Test.Limit
 import qualified Test.Simple
 import qualified Test.Trace
@@ -26,7 +25,6 @@ tests = let (*) = (,) in
     ,"fsatrace" * Test.Example.FSATrace.main
     ,"stack" * Test.Example.Stack.main
     ,"dump" * dump
-    ,"openssl" * Test.Example.Openssl.main
     ]
 
 main = do
