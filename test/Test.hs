@@ -14,7 +14,6 @@ import Development.Rattle
 
 import qualified Test.Example.FSATrace
 import qualified Test.Example.Stack
-import qualified Test.Example.Vim
 import qualified Test.Limit
 import qualified Test.Simple
 import qualified Test.Trace
