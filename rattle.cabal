@@ -138,11 +138,6 @@ test-suite rattle-test
         Paths_rattle
         Test.Example.FSATrace
         Test.Example.Stack
-        Test.Example.CmdHelpers
-        Test.Example.Openssl
-        Test.Example.OpensslVariables
-        Test.Example.LibCryptoObjs
-        Test.Example.LibCryptoso3Objs          
         Test.Simple
         Test.Trace
         Test.Limit
