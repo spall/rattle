@@ -1,17 +1,19 @@
 
-module Test.Example.Vim(main) where
+module Vim(main) where
 
 import Development.Rattle
 import Test.Example.VimVariables
-import Test.Type
 import Test.Example.CmdHelpers
 import Control.Monad
 import Development.Shake.FilePath
 import qualified Development.Shake.Command as C
 import Data.List
 
+rattleOptions_ :: RattleOptions
+rattleOptions_ = RattleOptions ".rattle" (Just "") "m1" True 16 [] [("PWD", ".")] Nothing
+
 main :: IO ()
-main = testGitVim "https://github.com/vim/vim" $ do
+main = rattleRun rattleOptions_ $ do
   withCmdOptions [Cwd "src"] $ do
     -- all: $(VIMTARGET) $(TOOLS) languages $(GUI_BUNDLE)
     -- $(VIMTARGET): auto/config.mk objects $(OBJ) version.c version.h
