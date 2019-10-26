@@ -17,8 +17,11 @@ import qualified Data.HashSet as Set
 libcryptoso3_extra = ["providers/default/ciphers/libcrypto-shlib-cipher_des.o","providers/default/ciphers/libcrypto-shlib-cipher_des_hw.o"
                      ,"providers/default/ciphers/libcrypto-shlib-cipher_rc4.o","providers/default/ciphers/libcrypto-shlib-cipher_rc4_hw.o"]
 
+rattleOptions_ :: RattleOptions
+rattleOptions_ = RattleOptions ".rattle" (Just "") "m1" True 16 [] [("PWD",".")] Nothing
+
 main :: IO ()
-main = rattleRun rattleOptions $ do
+main = rattleRun rattleOptions_ $ do
   let generated_mandatory = ["crypto/include/internal/bn_conf.h" --
                             ,"crypto/include/internal/dso_conf.h"
                             ,"doc/man7/openssl_user_macros.pod", "include/openssl/opensslconf.h"

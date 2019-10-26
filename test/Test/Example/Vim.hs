@@ -8,8 +8,11 @@ import Control.Monad
 import Development.Shake.FilePath
 import Data.List
 
+rattleOptions_ :: RattleOptions
+rattleOptions_ = RattleOptions ".rattle" (Just "") "m1" True 16 [] [("PWD",".")] Nothing
+
 main :: IO ()
-main = rattleRun rattleOptions $ do
+main = rattleRun rattleOptions_ $ do
   withCmdOptions [Cwd "src"] $ do
     -- all: $(VIMTARGET) $(TOOLS) languages $(GUI_BUNDLE)
     -- $(VIMTARGET): auto/config.mk objects $(OBJ) version.c version.h
