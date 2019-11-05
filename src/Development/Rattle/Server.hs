@@ -181,7 +181,9 @@ nextSpeculate Rattle{..} S{..}
             | x `Map.member` started && (not $ Set.member x recoverable) = step rw xs -- do not update the rw, since its already covered
             {- basically want to change the above condition to allow failed started commands -}
         step rw@(r, w) ((x, mconcat -> t@Trace{..}):xs)
-            | not $ any (\v -> v `Set.member` r || v `Set.member` w || v `Map.member` hazard) tWrite
+            | not $ any (\v -> v `Set.member` r || v `Set.member` w || (case Map.lookup v hazard of
+                                                                           Nothing -> False
+                                                                           Just (Write, t1, c1, _) -> x /= c1)) tWrite
                 -- if anyone I write has ever been read or written, or might be by an ongoing thing, that would be bad
             , not $ any (`Set.member` w) tRead
                 -- if anyone I read might be being written right now, that would be bad
