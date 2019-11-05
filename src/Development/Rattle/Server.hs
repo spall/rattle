@@ -74,6 +74,7 @@ data S = S
     ,recoverable :: Set.HashSet Cmd
         -- ^ "read" cmds that were speculated and were involved in a recoverable hazard
         --   when a cmd in this set is required it will re-run
+    ,latest :: Map.HashMap Cmd [Trace FilePath]
     } deriving Show
 
 
@@ -121,7 +122,7 @@ withRattle options@RattleOptions{..} act = withUI rattleFancyUI (return "Running
     speculated <- newIORef False
 
     runNum <- nextRun shared rattleMachine
-    let s0 = Right $ S t0 Map.empty [] Map.empty [] [] Set.empty
+    let s0 = Right $ S t0 Map.empty [] Map.empty [] [] Set.empty Map.empty
     state <- newVar s0
 
     let saveSpeculate state =
@@ -171,7 +172,10 @@ runSpeculate rattle@Rattle{..} = void $ forkIO $ void $ runPoolMaybe pool $
 nextSpeculate :: Rattle -> S -> Maybe Cmd
 nextSpeculate Rattle{..} S{..}
     | any (null . thd3) running = Nothing
-    | otherwise = step (addTrace (Set.empty, Set.empty) $ mconcat $ concatMap thd3 running) speculate
+    | otherwise = step (addTrace (Set.empty, Set.empty) $ mconcat $ concatMap thd3 running) (map (\p@(c,ts) ->
+                                                                                                    case Map.lookup c latest of
+                                                                                                      Nothing -> p
+                                                                                                      Just ls -> (c,ls)) speculate)
     where
         addTrace (r,w) Trace{..} = (f r tRead, f w tWrite)
             where f set xs = Set.union set $ Set.fromList xs
@@ -335,7 +339,7 @@ cmdRattleFinished rattle@Rattle{..} start cmd trace@Trace{..} save = join $ modi
         s <- return s{timestamp = succ $ timestamp s}
         s <- return s{running = filter ((/= start) . fst3) $ running s}
         s <- return s{pending = [(stop, cmd, trace) | save] ++ pending s}
-
+        s <- return s{latest = Map.insert cmd [fmap fst trace] $ latest s}  
         -- look for hazards
         -- push writes to the end, and reads to the start, because reads before writes is the problem
         let newHazards = Map.fromList $ map ((,(Write,stop ,cmd, Map.empty)) . fst) tWrite ++
