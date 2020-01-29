@@ -281,8 +281,8 @@ cmdRattleRun rattle@Rattle{..} cmd@(Cmd opts args) startTimestamp hist msgs = do
                 rstr = if null changedR
                        then if null changedW
                             then "Nothing changed causing cmd to run.\n"
-                            else "Changed WRITE files caused cmd to run: " ++ show (map fst3 $ Set.toList $ head changedW) ++ " \n"
-                       else "Changed READ files caused cmd to run: " ++ show (map fst3 $ Set.toList $ head changedR) ++ " \n"
+                            else "Changed WRITE files caused cmd to run: " ++ show (map fst3 $ Set.toList $ last changedW) ++ " \n"
+                       else "Changed READ files caused cmd to run: " ++ show (map fst3 $ Set.toList $ last changedR) ++ " \n"
 
                 (sw,cw) = partition (\(fp,_,h) -> case Map.lookup fp ht of
                                                     (Just h2) -> h == h2

@@ -53,8 +53,8 @@ toCmds = f . lines
 -- takes a single file as an argument and a number of threads
 main :: IO ()
 main = do
-  [fileN,j] <- getArgs
+  [fileN,dname,j] <- getArgs
   file <- readFile fileN
   let cmds = toCmds file
-  rattleRun (localOptions (read j) $ fileN <.> "debug") $
+  rattleRun (localOptions (read j) $ dname <.> "debug") $
     forM_ cmds $ uncurry shcCmd
