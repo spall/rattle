@@ -21,9 +21,10 @@ import Data.Serialize
 import General.FileName
 
 data Cmd = Cmd [CmdOption] [String]
-    deriving (Show, Eq, Generic, Hashable)
+    deriving (Show, Eq, Generic, Hashable, Read)
 
 instance Serialize Cmd
+deriving instance Read CmdOption
 deriving instance Serialize CmdOption
 deriving instance Generic CmdOption
 deriving instance Hashable CmdOption

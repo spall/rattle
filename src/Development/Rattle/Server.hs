@@ -118,27 +118,30 @@ withRattle options@RattleOptions{..} act = withUI rattleFancyUI (return "Running
         state <- newVar s0
         debugFile <- newVar =<< case rattleDebug of
                                      Nothing -> return Nothing
-                                     Just f -> Just <$> openFile f WriteMode
+                                     Just f -> Just <$> openFile f AppendMode
                                      
         let saveSpeculate state =
-                whenJust rattleSpeculate $ \name ->
-                    whenRightM (readVar state) $ \v ->
-                        setSpeculate shared name $ reverse $ required v
+              whenJust rattleSpeculate $ \name ->
+              whenRightM (readVar state) $ \v ->
+              setSpeculate shared name $ reverse $ required v
 
-    -- first try and run it
-    let attempt1 = withPool rattleProcesses $ \pool -> do
-            let r = Rattle{..}
-            runSpeculate r
-            (act r <* saveSpeculate state) `finally` (writeVar state (Left Finished) >> withVar debugFile (\case
+        -- first try and run it
+        let attempt1 = withPool rattleProcesses $ \pool -> do
+              let r = Rattle{..}
+              runSpeculate r
+              (act r <* saveSpeculate state) `finally` (writeVar state (Left Finished) >> withVar debugFile (\case
                                                                                                               Nothing -> return ()
                                                                                                               Just h -> hClose h))
-    attempt1 `catch` \(h :: Hazard) -> do
-        b <- readIORef speculated
-        if not (recoverableHazard h || restartableHazard h) then throwIO h else do
+        attempt1 `catch` \(h :: Hazard) -> do
+          b <- readIORef speculated
+          if not (recoverableHazard h || restartableHazard h) then throwIO h else do
             -- if we speculated, and we failed with a hazard, try again
             putStrLn "Warning: Speculation lead to a hazard, retrying without speculation"
             print h
             state <- newVar s0
+            debugFile <- newVar =<< case rattleDebug of
+                                     Nothing -> return Nothing
+                                     Just f -> Just <$> openFile f WriteMode
             withPool rattleProcesses $ \pool -> do
                 let r = Rattle{speculate=[], ..}
                 (act r <* saveSpeculate state) `finally` (writeVar state (Left Finished) >> withVar debugFile (\case
@@ -233,7 +236,7 @@ cmdRattleRun rattle@Rattle{..} cmd@(Cmd opts args) startTimestamp hist msgs = do
             -- we have something consistent at this point, no work to do
             -- technically we aren't writing to the tWrite part of the trace, but if we don't include that
             -- skipping can turn write/write hazards into read/write hazards
-            cmdRattleFinished rattle startTimestamp cmd t False
+            display ["Doing nothing: " ++ (show $ fmap fst3 $ tTouch t)] $ cmdRattleFinished rattle startTimestamp cmd t False
         [] -> do
             -- lets see if any histRead's are also available in the cache
             fetcher <- memoIO $ getFile shared
@@ -244,7 +247,7 @@ cmdRattleRun rattle@Rattle{..} cmd@(Cmd opts args) startTimestamp hist msgs = do
             case download of
                 Just (t, download) -> do
                     display ["copying"] $ sequence_ download
-                    cmdRattleFinished rattle startTimestamp cmd t False
+                    display ["copied: " ++ (show $ fmap fst3 $ tTouch t)] $ cmdRattleFinished rattle startTimestamp cmd t False
                 Nothing -> do
                     start <- timer
                     (opts2, c) <- display [] $ cmdRattleRaw ui opts args
