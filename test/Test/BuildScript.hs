@@ -15,11 +15,11 @@ import Data.Maybe
 -- dir: directory-following-command-executes-from
 -- cmd (cmd is terminated by a newline if the line does not end with '\')
 
--- ( this might need to be changed for windows)
+ -- ( this might need to be changed for windows)
 
 
-localOptions :: Int -> FilePath -> RattleOptions
-localOptions j f = RattleOptions ".rattle" (Just "") "m1" True j [] [(BS.pack "PWD", ".")] Nothing $ Just f
+localOptions :: Int -> Maybe FilePath -> RattleOptions
+localOptions j f = RattleOptions ".rattle" (Just "") "m1" True j [] [(BS.pack "PWD", ".")] Nothing f
 
 shcCmd :: String -> FilePath -> Run ()
 shcCmd c d = cmd (Cwd d) ["sh", "-c", c]
@@ -53,8 +53,10 @@ toCmds = f . lines
 -- takes a single file as an argument and a number of threads
 main :: IO ()
 main = do
-  [fileN,dname,j] <- getArgs
+  [fileN,dname,j,debug] <- getArgs
   file <- readFile fileN
   let cmds = toCmds file
-  rattleRun (localOptions (read j) $ dname <.> "debug") $
-    forM_ cmds $ uncurry shcCmd
+  if debug == "debug"
+    then rattleRun (localOptions (read j) $ Just $ dname <.> "debug") $ forM_ cmds $ uncurry shcCmd
+    else rattleRun (localOptions (read j) Nothing) $ 
+             forM_ cmds $ uncurry shcCmd

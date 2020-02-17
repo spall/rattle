@@ -229,14 +229,20 @@ listToMaybeSet ls = Just $ Set.fromList ls
 cmdRattleRun :: Rattle -> Cmd -> Seconds -> [Trace (FileName, ModTime, Hash)] -> [String] -> IO ()
 cmdRattleRun rattle@Rattle{..} cmd@(Cmd opts args) startTimestamp hist msgs = do
     let match (fp, mt, h) = (== Just h) <$> hashFileForwardIfStale fp mt h
-    (histRead, changedR) <- helper (fmap listToMaybeSet . filterM (notM . match) . tRead . tTouch) hist
-    (histBoth, changedW) <- helper (fmap listToMaybeSet . filterM (notM . match) . tWrite . tTouch) histRead
+    (histRead, changedR) <- if isJust $ rattleDebug options
+                            then helper (fmap listToMaybeSet . filterM (notM . match) . tRead . tTouch) hist
+                            else (,[]) <$> filterM (allM match . tRead . tTouch) hist 
+    (histBoth, changedW) <- if isJust $ rattleDebug options
+                            then helper (fmap listToMaybeSet . filterM (notM . match) . tWrite . tTouch) histRead
+                            else (,[]) <$> filterM (allM match . tWrite . tTouch) histRead
     case histBoth of
         t:_ ->
             -- we have something consistent at this point, no work to do
             -- technically we aren't writing to the tWrite part of the trace, but if we don't include that
             -- skipping can turn write/write hazards into read/write hazards
-            display ["Doing nothing: " ++ (show $ fmap fst3 $ tTouch t)] $ cmdRattleFinished rattle startTimestamp cmd t False
+            if isJust (rattleDebug options)
+            then display ["Doing nothing: " ++ (show $ fmap fst3 $ tTouch t)] $ cmdRattleFinished rattle startTimestamp cmd t False
+            else cmdRattleFinished rattle startTimestamp cmd t False
         [] -> do
             -- lets see if any histRead's are also available in the cache
             fetcher <- memoIO $ getFile shared
@@ -247,7 +253,9 @@ cmdRattleRun rattle@Rattle{..} cmd@(Cmd opts args) startTimestamp hist msgs = do
             case download of
                 Just (t, download) -> do
                     display ["copying"] $ sequence_ download
-                    display ["copied: " ++ (show $ fmap fst3 $ tTouch t)] $ cmdRattleFinished rattle startTimestamp cmd t False
+                    if isJust (rattleDebug options)
+                      then display ["copied: " ++ (show $ fmap fst3 $ tTouch t)] $ cmdRattleFinished rattle startTimestamp cmd t False
+                      else cmdRattleFinished rattle startTimestamp cmd t False
                 Nothing -> do
                     start <- timer
                     (opts2, c) <- display [] $ cmdRattleRaw ui opts args
