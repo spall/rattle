@@ -1,7 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables #-}
 
 module Benchmark.VsMake(
-    VsMake(..), vsMake, Args,
+    VsMake(..), vsMake, Args(..),
     ) where
 
 import Benchmark.Args
@@ -15,6 +15,7 @@ import Data.IORef
 import Data.Maybe
 import System.IO.Extra
 import Control.Monad.Extra
+import qualified Data.List as List
 
 
 data VsMake = VsMake
@@ -23,11 +24,16 @@ data VsMake = VsMake
     ,generateVersion :: Int
     ,clean :: IO ()
     ,broken :: [String]
+    ,configure :: Maybe CmdArgument
     ,make :: CmdArgument
     ,rattle :: CmdArgument
     ,master :: String
     }
 
+gitCheckoutCommit :: VsMake -> String -> IO String
+gitCheckoutCommit VsMake{..} c = do
+  Stdout x <- cmd "git reset --hard" [c]
+  return $ words x !! 4
 
 gitCheckout :: VsMake -> Int -> IO String
 gitCheckout VsMake{..} i = do
@@ -60,6 +66,12 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
                     act commit
     let stderr = [EchoStderr False | no_stderr]
 
+    let checkoutCommit c act = do
+          commit <- gitCheckoutCommit vs c
+          when (commit `notElem` broken) $
+                flip onException (putStrLn $ "AT COMMIT " ++ commit) $
+                    act commit
+    
     withCurrentDirectory dir $ do
         -- don't pass a depth argument, or git changes the length of the shown commit hashes
         -- which messes up caching and broken hashes
@@ -68,15 +80,27 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
         -- generate all the Rattle files
         when ("generate" `elemOrNull` step) $ do
             putStrLn "GENERATING RATTLE SCRIPTS"
-            forM_ (counted commitList) $ \i -> do
+            if isJust commitsList
+              then do
+              forM_ (counted $ fromJust commitsList) $ \c -> do
+                putChar '.' >> hFlush stdout
+                checkoutCommit c $ \commit -> do
+                  file <- generateName vs commit
+                  unlessM (doesFileExist file) $ do
+                    res <- generate
+                    evaluate $ length res
+                    writeFile file res
+              putStrLn ""
+              else do
+              forM_ (counted commitList) $ \i -> do
                 putChar '.' >> hFlush stdout
                 checkout i $ \commit -> do
-                    file <- generateName vs commit
-                    unlessM (doesFileExist file) $ do
-                        res <- generate
-                        evaluate $ length res
-                        writeFile file res
-            putStrLn ""
+                  file <- generateName vs commit
+                  unlessM (doesFileExist file) $ do
+                    res <- generate
+                    evaluate $ length res
+                    writeFile file res
+              putStrLn ""
 
 
         -- for different levels of parallelism
@@ -84,26 +108,84 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
             makeTime <- newIORef 0
             rattleTime <- newIORef 0
 
+            let buildMake f ls = forM_ ls $ \x ->
+                  f x $ \_ ->
+                  timed makeTime "make" j $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
+
+
+            let buildRattle f ls = forM_ ls $ \x ->
+                  f x $ \commit -> do
+                  file <- generateName vs commit
+                  cmds <- lines <$> readFile' file
+                  let opts = rattleOptions{rattleProcesses=j, rattleUI=Just RattleQuiet, rattleNamedDirs=[], rattleShare=False}
+                  timed rattleTime "rattle" j $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
+
+            let deleteFiles = do
+                  (Stdout ls) :: (Stdout String)
+                              <- cmd "ls -a"
+                  cmd_ Shell "rm -rf " $ List.delete ".." $ List.delete "." $ words ls
+
             -- first build with make
             when ("make" `elemOrNull` step) $ do
-                putStrLn "BUILDING WITH MAKE"
-                clean
-                forM_ (counted $ commitList ++ [0]) $ \i ->
-                    checkout i $ \_ ->
-                        timed makeTime "make" j $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
+              putStrLn "BUILDING WITH MAKE"
+              clean
+              if isJust commitsList
+                then do
+                let ls = counted $ fromJust commitsList
+                if isJust configure
+                  then do
+                  checkoutCommit (head ls) $ \_ -> do
+                    cmd_ configure (EchoStdout False) stderr
+                    timed makeTime "make" j $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
+                  buildMake checkoutCommit $ tail ls
+                  else do
+                  buildMake checkoutCommit ls
+                else do
+                let ls = counted $ commitList ++ [0]
+                if isJust configure
+                  then do
+                  checkout (head ls) $ \_ -> do
+                    cmd_ configure (EchoStdout False) stderr
+                    timed makeTime "make" j $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
+                  buildMake checkout $ tail ls
+                  else do
+                  buildMake checkout ls
 
             -- now with rattle
             when ("rattle" `elemOrNull` step) $ do
                 putStrLn "BUILDING WITH RATTLE"
-                clean
-                whenM (doesDirectoryExist ".rattle") $
-                    removeDirectoryRecursive ".rattle"
-                forM_ (counted $ commitList ++ [0]) $ \i ->
-                    checkout i $ \commit -> do
-                        file <- generateName vs commit
-                        cmds <- lines <$> readFile' file
-                        let opts = rattleOptions{rattleProcesses=j, rattleUI=Just RattleQuiet, rattleNamedDirs=[], rattleShare=False}
-                        timed rattleTime "rattle" j $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
+                cmd_ Shell "rm -rf ./*"
+                deleteFiles
+                cmd_ "git clone" repo "."
+
+                if isJust commitsList
+                  then do
+                  let ls = counted $ fromJust commitsList
+                  if isJust configure
+                    then do
+                    checkoutCommit (head ls) $ \commit -> do
+                      cmd_ configure (EchoStdout False) stderr
+                      file <- generateName vs commit
+                      cmds <- lines <$> readFile' file
+                      let opts = rattleOptions{rattleProcesses=j, rattleUI=Just RattleQuiet, rattleNamedDirs=[], rattleShare=False}
+                      timed rattleTime "rattle" j $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
+                    buildRattle checkoutCommit $ tail ls
+                    else do
+                    buildRattle checkoutCommit ls
+                  else do
+                  let ls = counted $ commitList ++ [0]
+                  if isJust configure
+                    then do
+                    checkout (head ls) $ \commit -> do
+                      cmd_ configure (EchoStdout False) stderr
+                      file <- generateName vs commit
+                      cmds <- lines <$> readFile' file
+                      let opts = rattleOptions{rattleProcesses=j, rattleUI=Just RattleQuiet, rattleNamedDirs=[], rattleShare=False}
+                      timed rattleTime "rattle" j $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
+
+                    buildRattle checkout $ tail ls
+                    else do
+                    buildRattle checkout ls
 
             make <- readIORef makeTime
             rattle <- readIORef rattleTime

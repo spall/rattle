@@ -7,6 +7,10 @@ import qualified Benchmark.FSATrace
 import qualified Benchmark.Redis
 import qualified Benchmark.Micro
 import qualified Benchmark.Intro
+import qualified Benchmark.Vim
+import qualified Benchmark.Openssl
+import qualified Benchmark.Tmux
+import qualified Benchmark.Node
 import Control.Monad
 
 
@@ -15,6 +19,10 @@ benchmarks =
     ,"redis" * Benchmark.Redis.main
     ,"micro" * Benchmark.Micro.main
     ,"intro" * Benchmark.Intro.main
+    ,"vim" * Benchmark.Vim.main
+    ,"openssl" * Benchmark.Openssl.main
+    ,"tmux" * Benchmark.Tmux.main
+    ,"node" * Benchmark.Node.main
     ]
     where (*) = (,)
 

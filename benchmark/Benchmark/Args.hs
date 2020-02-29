@@ -13,6 +13,7 @@ data Args = Args
     ,repeat_ :: Maybe Int
     ,step :: [String] -- which steps to run
     ,commits :: Maybe Int
+    ,commitsList :: Maybe [String]
     ,no_stderr :: Bool
     ,count :: Maybe Int
     }
@@ -22,9 +23,10 @@ mode :: Mode (CmdArgs Args)
 mode = cmdArgsMode $ Args
     {names = [] &= args
     ,threads = [] &= name "j"
-    ,repeat_ = Nothing
-    ,step = []
+    ,repeat_ = Nothing &= name "n"
+    ,step = ["generate","rattle"]
     ,commits = Nothing
+    ,commitsList = Nothing    
     ,no_stderr = False
     ,count = Nothing
     }
