@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 
 -- | A bit like 'Fence', but not thread safe and optimised for avoiding taking the fence
 module General.Thread(
@@ -26,10 +25,10 @@ newThreadFinally act cleanup = do
         res <- try $ unmask act
         me <- myThreadId
         cleanup (Thread me bar) res
-    return $ Thread t bar
+    pure $ Thread t bar
 
 stopThreads :: [Thread] -> IO ()
 stopThreads threads = do
     -- if a thread is in a masked action, killing it may take some time, so kill them in parallel
-    bars <- sequence [do forkIO $ killThread t; return bar | Thread t bar <- threads]
+    bars <- sequence [do forkIO $ killThread t; pure bar | Thread t bar <- threads]
     mapM_ waitBarrier bars

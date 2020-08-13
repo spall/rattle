@@ -11,6 +11,7 @@ import Development.Shake.Command
 import System.Time.Extra
 import Control.Exception
 import System.FilePath
+import Data.List
 import Data.IORef
 import Data.Maybe
 import System.IO.Extra
@@ -39,19 +40,20 @@ gitCheckout :: VsMake -> Int -> IO String
 gitCheckout VsMake{..} i = do
     Stdout x <- cmd "git reset --hard" ["origin/" ++ master ++ "~" ++ show i]
     -- HEAD is now at 41fbba1 Warning
-    return $ words x !! 4
+    pure $ words x !! 4
 
 
 generateName :: VsMake -> String -> IO FilePath
 generateName VsMake{..} commit = do
     tdir <- getTemporaryDirectory
-    return $ tdir </> takeBaseName repo ++ "." ++ commit ++ "." ++ show generateVersion ++ ".txt"
+    pure $ tdir </> takeBaseName repo ++ "." ++ commit ++ "." ++ show generateVersion ++ ".txt"
 
 
-timed :: IORef Seconds -> String -> Int -> IO () -> IO ()
-timed ref msg j act = do
+timed :: IORef Seconds -> String -> Int -> Int -> IO () -> IO ()
+timed ref msg j commit act = do
     (t, _) <- duration act
-    putStrLn $ msg ++ " " ++ show j ++ " = " ++ showDuration t
+    appendFile "vsmake.log" $ intercalate "\t" [msg, show j, show commit, show t] ++ "\n"
+    putStrLn $ msg ++ " " ++ show j ++ " (" ++ show commit ++ ") = " ++ showDuration t
     modifyIORef' ref (+ t)
 
 vsMake :: VsMake -> Args -> IO ()

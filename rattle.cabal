@@ -1,7 +1,7 @@
 cabal-version:      >= 1.18
 build-type:         Simple
 name:               rattle
-version:            0.1
+version:            0.2
 license:            BSD3
 x-license:          BSD-3-Clause OR Apache-2.0
 license-file:       LICENSE
@@ -14,7 +14,7 @@ description:
     A forward build system like Fabrciate but with speculation and remote caching.
 homepage:           https://github.com/ndmitchell/rattle#readme
 bug-reports:        https://github.com/ndmitchell/rattle/issues
-tested-with:        GHC==8.8.1, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2
+tested-with:        GHC==8.10.1, GHC==8.8.3, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2
 extra-doc-files:
     CHANGES.txt
     README.md
@@ -163,6 +163,7 @@ executable buildScript
         Development.Rattle.Types
         Development.Rattle.UI
         General.Bilist
+        General.Binary
         General.Extra
         General.Thread
         General.Paths
@@ -221,6 +222,7 @@ test-suite rattle-test
         Development.Rattle.Types
         Development.Rattle.UI
         General.Bilist
+        General.Binary
         General.Extra
         General.Thread
         General.Paths

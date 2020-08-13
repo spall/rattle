@@ -13,14 +13,19 @@ import qualified System.Console.Terminal.Size as Terminal
 import Numeric.Extra
 import General.EscCodes
 import qualified Data.ByteString.Char8 as BS
-import Data.IORef
+import Data.IORef.Extra
 import Control.Concurrent.Async
 import Control.Monad.Extra
 
 
-data RattleUI = RattleSerial -- Show a series of lines for each command run
-              | RattleFancy -- Show a few lines that change as commands run
-              | RattleQuiet -- Don't show commands
+-- | What UI should rattle show the user.
+data RattleUI
+    = -- | Show a series of lines for each command run
+      RattleSerial
+    | -- | Show a few lines that change as commands run
+      RattleFancy
+    | -- | Don't show commands
+      RattleQuiet
     deriving Show
 
 data S = S
@@ -103,7 +108,7 @@ withUI fancy header act = case fancy of
 withUICompact :: IO String -> (UI -> IO a) -> IO a
 withUICompact header act = do
     ref <- newIORef emptyS
-    let tweak f = atomicModifyIORef ref $ \s -> (f s, ())
+    let tweak f = atomicModifyIORef_ ref f
     time <- offsetTime
     let tick = do
             h <- header
