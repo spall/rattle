@@ -10,7 +10,7 @@ import System.IO.Extra
 main :: Args -> IO ()
 main args = vsMake VsMake{..} args{commits=Just 40, commitsList = Just commits}
   where
-    broken = ["ee3d3db"]
+    broken = ["ee3d3db3"]
     repo = "https://github.com/tmux/tmux"
     master = "master"
     configure = Just $ cmd Shell "sh autogen.sh && ./configure"
@@ -18,19 +18,21 @@ main args = vsMake VsMake{..} args{commits=Just 40, commitsList = Just commits}
     rattle = cmd Shell
     generateVersion = 1
     
-    commits1=["ed16f51", "61b075a", "e9b1294", "3e70130", "8457f54", "a01c9ff", "cdf1383"
-             , "74b4240", "0eb7b54", "f3ea318", "7cdf5ee", "ee3d3db"]
+    commits0=["ed16f51e", "61b075a2", "e9b12943", "3e701309", "8457f54e", "a01c9ffc", "cdf13837"
+             , "74b42407", "0eb7b547", "f3ea318a", "7cdf5ee9"]
+    commits1=["ee3d3db3"]
     -- 685 fails because speculation caused a failed cmd
-    commits2=["685eb38", "60ab714", "7eada28", "7f3feb1", "8b22da6", "bc36700", "32be954"
-             , "6f0241e", "19d5f4a", "43b3675", "0bf153d"]
-    commits3=["4822130"]
-    commits4=["47174f5", "c915cfc", "5455390", "400750b", "470cba3", "a4d8437", "6c28d0d"
-             , "24cd726", "9900ccd", "c391d50" ,"0c6c8c4" ,"fdbc111" ,"37919a6", "22e9cf0"
-             , "ba542e4", "4694afb"]
-    commits = commits1 ++ commits2 ++ commits3 ++ commits4
+    commits2=["685eb381", "60ab7144", "7eada28f", "7f3feb18", "8b22da69", "bc36700d", "32be954b"
+             , "6f0241e6", "19d5f4a0", "43b36752", "0bf153da"]
+    commits3=["4822130b"]
+    commits4=["47174f51", "c915cfc7", "54553903", "400750bb", "470cba35", "a4d8437b", "6c28d0dd"
+             , "24cd726d", "9900ccd0", "c391d50c" ,"0c6c8c4e" ,"fdbc1116" ,"37919a6b", "22e9cf04"
+             , "ba542e42", "4694afbe"]
+    commits = commits0 ++ commits1 ++ commits2 ++ commits3 ++ commits4
 
     getScript :: String -> FilePath
-    getScript commit | elem commit commits1 = "tmux." ++ head commits1 ++ ".txt"
+    getScript commit | elem commit commits0 = "tmux." ++ head commits0 ++ ".txt"
+		     | elem commit commits1 = "tmux." ++ head commits1 ++ ".txt"
                      | elem commit commits2 = "tmux." ++ head commits2 ++ ".txt"
                      | elem commit commits3 = "tmux." ++ head commits3 ++ ".txt"
                      | elem commit commits4 = "tmux." ++ head commits4 ++ ".txt"
@@ -41,7 +43,7 @@ main args = vsMake VsMake{..} args{commits=Just 40, commitsList = Just commits}
       -- find out the commit then just read from the appropriate file that already exists
       Stdout cStr <- cmd "git show --oneline -s" -- command is first thing  
       let commit = head $ words cStr
-      readFile' $ "/data/home.local/sjspall/icfp/rattle-papers/project-data/tmux/machine_hive/scripts/" ++ (getScript commit)
+      readFile' $ "/home/spall/rattle-stuff/rattle-papers/tmux_scripts/" ++ (getScript commit)
 
     clean :: IO ()
     clean = cmd_ "echo no" (EchoStdout False)

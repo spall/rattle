@@ -49,7 +49,7 @@ generateName VsMake{..} commit = do
     pure $ tdir </> takeBaseName repo ++ "." ++ commit ++ "." ++ show generateVersion ++ ".txt"
 
 
-timed :: IORef Seconds -> String -> Int -> Int -> IO () -> IO ()
+timed :: IORef Seconds -> String -> Int -> String -> IO () -> IO ()
 timed ref msg j commit act = do
     (t, _) <- duration act
     appendFile "vsmake.log" $ intercalate "\t" [msg, show j, show commit, show t] ++ "\n"
@@ -111,8 +111,8 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
             rattleTime <- newIORef 0
 
             let buildMake f ls = forM_ ls $ \x ->
-                  f x $ \_ ->
-                  timed makeTime "make" j $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
+                  f x $ \i ->
+                  timed makeTime "make" j i $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
 
 
             let buildRattle f ls = forM_ ls $ \x ->
@@ -120,7 +120,7 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
                   file <- generateName vs commit
                   cmds <- lines <$> readFile' file
                   let opts = rattleOptions{rattleProcesses=j, rattleUI=Just RattleQuiet, rattleNamedDirs=[], rattleShare=False}
-                  timed rattleTime "rattle" j $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
+                  timed rattleTime "rattle" j commit $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
 
             let deleteFiles = do
                   (Stdout ls) :: (Stdout String)
@@ -136,9 +136,9 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
                 let ls = counted $ fromJust commitsList
                 if isJust configure
                   then do
-                  checkoutCommit (head ls) $ \_ -> do
+                  checkoutCommit (head ls) $ \i -> do
                     cmd_ configure (EchoStdout False) stderr
-                    timed makeTime "make" j $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
+                    timed makeTime "make" j i $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
                   buildMake checkoutCommit $ tail ls
                   else do
                   buildMake checkoutCommit ls
@@ -146,9 +146,9 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
                 let ls = counted $ commitList ++ [0]
                 if isJust configure
                   then do
-                  checkout (head ls) $ \_ -> do
+                  checkout (head ls) $ \i -> do
                     cmd_ configure (EchoStdout False) stderr
-                    timed makeTime "make" j $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
+                    timed makeTime "make" j i $ cmd_ make ["-j" ++ show j] (EchoStdout False) stderr
                   buildMake checkout $ tail ls
                   else do
                   buildMake checkout ls
@@ -170,7 +170,7 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
                       file <- generateName vs commit
                       cmds <- lines <$> readFile' file
                       let opts = rattleOptions{rattleProcesses=j, rattleUI=Just RattleQuiet, rattleNamedDirs=[], rattleShare=False}
-                      timed rattleTime "rattle" j $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
+                      timed rattleTime "rattle" j commit $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
                     buildRattle checkoutCommit $ tail ls
                     else do
                     buildRattle checkoutCommit ls
@@ -183,7 +183,7 @@ vsMake vs@VsMake{..} Args{..} = withTempDir $ \dir -> do
                       file <- generateName vs commit
                       cmds <- lines <$> readFile' file
                       let opts = rattleOptions{rattleProcesses=j, rattleUI=Just RattleQuiet, rattleNamedDirs=[], rattleShare=False}
-                      timed rattleTime "rattle" j $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
+                      timed rattleTime "rattle" j commit $ rattleRun opts $ forM_ cmds $ cmd rattle stderr
 
                     buildRattle checkout $ tail ls
                     else do
