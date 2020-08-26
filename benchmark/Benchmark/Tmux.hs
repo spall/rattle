@@ -31,11 +31,11 @@ main args = vsMake VsMake{..} args{commits=Just 40, commitsList = Just commits}
     commits = commits0 ++ commits1 ++ commits2 ++ commits3 ++ commits4
 
     getScript :: String -> FilePath
-    getScript commit | elem commit commits0 = "tmux." ++ head commits0 ++ ".txt"
-		     | elem commit commits1 = "tmux." ++ head commits1 ++ ".txt"
-                     | elem commit commits2 = "tmux." ++ head commits2 ++ ".txt"
-                     | elem commit commits3 = "tmux." ++ head commits3 ++ ".txt"
-                     | elem commit commits4 = "tmux." ++ head commits4 ++ ".txt"
+    getScript commit | elem commit commits0 = "tmux." ++ head commits0 ++ ".cmds"
+		     | elem commit commits1 = "tmux." ++ head commits1 ++ ".cmds"
+                     | elem commit commits2 = "tmux." ++ head commits2 ++ ".cmds"
+                     | elem commit commits3 = "tmux." ++ head commits3 ++ ".cmds"
+                     | elem commit commits4 = "tmux." ++ head commits4 ++ ".cmds"
                      | otherwise = error "No script created for commit: " ++ commit
 
     generate :: IO String

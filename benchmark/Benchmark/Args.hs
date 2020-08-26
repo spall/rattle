@@ -23,8 +23,8 @@ mode :: Mode (CmdArgs Args)
 mode = cmdArgsMode $ Args
     {names = [] &= args
     ,threads = [] &= name "j"
-    ,repeat_ = Nothing &= name "n"
-    ,step = ["generate","rattle"]
+    ,repeat_ = Just 5 &= name "n"
+    ,step = ["generate","rattle","make"]
     ,commits = Nothing
     ,commitsList = Nothing    
     ,no_stderr = False

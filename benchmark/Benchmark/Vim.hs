@@ -18,31 +18,37 @@ main args = vsMake VsMake{..} args{commits=Just 35, commitsList = Just commits}
     rattle = cmd Shell
     generateVersion = 1
 
-    commits1=["4b96df5"]
+    commits1=["4b96df5a0"] 
+    commits2=["318e7a9c0"]
+    commits3=["3f169ce17"]
+    commits4=["50985eb1f", "89bfc8218"] 
+    commits5=["f8ddb2578"]
+    commits6=["7d8ea0b24", "272ca95fc"]
 
-    commits2=["318e7a9", "3f169ce", "50985eb", "89bfc82", "f8ddb25", "7d8ea0b", "272ca95"]
+    commits7=["842931cd7", "5b18c248d"]
+    commits8=["07da94b0f", "58ceca5ca", "97a2af39c", "8cbd6dfc0", "a6d536829", "9a5e5a3e3"]
+    commits9=["4549ece47"]
+    commits10=["0ff6aad39"]
+    commits11=["5d98dc2a4"]
+    commits12=["db661fb95"]
+    commits13=["e258368b4", "70b3e706b", "df54382ea"]
 
-    commits3=["842931c", "5b18c24", "07da94b", "58ceca5", "97a2af3", "8cbd6df", "a6d5368"
-             ,"9a5e5a3", "4549ece", "0ff6aad", "5d98dc2", "db661fb", "e258368", "70b3e70"
-             ,"df54382"]
+    commits14=["b09920203"]
+    commits15=["0c3064b39", "21109272f", "9f2d020d3", "5feabe00c", "92be6e3f4", "a259d8d30"
+             ,"705724e43", "0b76ad53b", "7f829cab3", "7cc96923c", "ab067a21b"]
 
-    commits4=["b099202", "0c3064b", "2110927", "9f2d020", "5feabe0", "92be6e3", "a259d8d"
-             ,"705724e", "0b76ad5", "7f829ca", "7cc9692", "ab067a2"]
-
-    commits = commits1 ++ commits2 ++ commits3 ++ commits4
+    commits = commits1 ++ commits2 ++ commits3 ++ commits4 ++ commits5 ++ commits6 ++ commits7
+    	    ++ commits8 ++ commits9 ++ commits10 ++ commits11 ++ commits12 ++ commits13
+	    ++ commits14 ++ commits15
 
     getScript :: String -> FilePath
-    getScript commit | elem commit commits1 = "vim." ++ head commits1 ++ ".txt"
-                     | elem commit commits2 = "vim." ++ head commits2 ++ ".txt"
-                     | elem commit commits3 = "vim." ++ head commits3 ++ ".txt"
-                     | elem commit commits4 = "vim." ++ head commits4 ++ ".txt"
-                     | otherwise = error "No script created for commit: " ++ commit
+    getScript commit = "vim." ++ commit ++ ".cmds"
 
     generate :: IO String
     generate = do
       Stdout cStr <- cmd "git show --oneline -s" -- command is first thing
       let commit = head $ words cStr
-      readFile' $ "/data/home.local/sjspall/icfp/rattle-papers/project-data/vim/machine_hive/scripts/" ++ (getScript commit)
+      readFile' $ "/home/spall/rattle-stuff/rattle-papers/vim_scripts/" ++ (getScript commit)
 
     clean :: IO ()
     clean = cmd_ "make clean" (EchoStdout False)
